@@ -1,0 +1,7 @@
+# Step 1 Basic AI - Specific dependencies
+# Common dependencies are in ../../shared/requirements-common.txt
+
+# Install common dependencies first:
+# pip install -r ../../shared/requirements-common.txt
+
+# No step-specific dependencies needed for basic AI mode
