@@ -1,0 +1,70 @@
+{
+  "strategies": [
+    {
+      "id": "address_change_strategy_1",
+      "name": "Standard Address Change",
+      "description": "Direct address update for orders within change window",
+      "conditions": [
+        "Order status is PENDING or CONFIRMED",
+        "Within 24 hours of order placement",
+        "New address is valid and deliverable"
+      ],
+      "actions": [
+        "Validate new delivery address",
+        "Recalculate shipping costs",
+        "Update order with new address",
+        "Send confirmation to customer",
+        "Update delivery estimates"
+      ],
+      "priority": 1
+    },
+    {
+      "id": "address_change_strategy_2", 
+      "name": "Cancel and Reorder with Gift Card",
+      "description": "For orders that cannot be changed, cancel and create new order using gift card",
+      "conditions": [
+        "Direct address change not possible",
+        "Order has been shipped or is outside change window",
+        "Customer wants different delivery address"
+      ],
+      "actions": [
+        "Cancel the existing order",
+        "Issue gift card for the full order amount",
+        "Create new order with desired delivery address",
+        "Apply gift card as payment method",
+        "Send confirmation with new order details",
+        "Explain the reason for cancel/reorder process"
+      ],
+      "priority": 2
+    },
+    {
+      "id": "address_change_strategy_3",
+      "name": "Redirect in Transit",
+      "description": "For shipped orders, attempt delivery redirection",
+      "conditions": [
+        "Order status is SHIPPED",
+        "Carrier supports delivery redirection",
+        "New address is in same delivery zone"
+      ],
+      "actions": [
+        "Contact shipping carrier for redirection",
+        "Validate feasibility of address change",
+        "Apply redirection fees if applicable", 
+        "Update tracking information",
+        "Notify customer of redirection status"
+      ],
+      "priority": 3
+    }
+  ],
+  "fallback_strategy": {
+    "id": "address_change_fallback",
+    "name": "Customer Service Escalation",
+    "description": "When no automated strategy can handle the request",
+    "actions": [
+      "Create customer service ticket",
+      "Escalate to human agent",
+      "Provide customer with ticket number",
+      "Set expectation for manual review within 2 hours"
+    ]
+  }
+}

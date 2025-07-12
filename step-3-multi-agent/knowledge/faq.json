@@ -1,0 +1,167 @@
+[
+  {
+    "id": "faq_001",
+    "category": "shipping",
+    "question": "What are your shipping policies?",
+    "answer": "We offer free standard shipping on orders over $50. Standard shipping takes 3-5 business days. Express shipping (1-2 business days) is available for $15. We ship to all 50 states and internationally to select countries.",
+    "tags": ["shipping", "delivery", "free shipping", "express shipping"],
+    "metadata": {
+      "last_updated": "2024-01-15",
+      "priority": "high"
+    }
+  },
+  {
+    "id": "faq_002",
+    "category": "shipping",
+    "question": "How can I track my order?",
+    "answer": "Once your order ships, you'll receive a tracking number via email. You can also log into your account and view your order history to see tracking information. Orders typically ship within 24-48 hours of placement.",
+    "tags": ["tracking", "order status", "shipping"],
+    "metadata": {
+      "last_updated": "2024-01-15",
+      "priority": "high"
+    }
+  },
+  {
+    "id": "faq_003",
+    "category": "returns",
+    "question": "What is your return policy?",
+    "answer": "We accept returns within 30 days of purchase. Items must be in original condition with tags attached. Return shipping is free for defective items. For other returns, customers are responsible for return shipping costs. Refunds are processed within 5-7 business days.",
+    "tags": ["returns", "refund", "exchange", "policy"],
+    "metadata": {
+      "last_updated": "2024-01-15",
+      "priority": "high"
+    }
+  },
+  {
+    "id": "faq_004",
+    "category": "returns",
+    "question": "How do I return an item?",
+    "answer": "To return an item, log into your account and select 'Return Item' from your order history. Print the prepaid return label and package the item securely. Drop it off at any authorized shipping location. You'll receive a return confirmation email once we receive your item.",
+    "tags": ["return process", "return label", "how to return"],
+    "metadata": {
+      "last_updated": "2024-01-15",
+      "priority": "medium"
+    }
+  },
+  {
+    "id": "faq_005",
+    "category": "payments",
+    "question": "What payment methods do you accept?",
+    "answer": "We accept all major credit cards (Visa, MasterCard, American Express, Discover), PayPal, Apple Pay, Google Pay, and gift cards. We also offer Buy Now, Pay Later options through Klarna and Afterpay for qualified purchases.",
+    "tags": ["payment", "credit cards", "PayPal", "Apple Pay", "gift cards"],
+    "metadata": {
+      "last_updated": "2024-01-15",
+      "priority": "high"
+    }
+  },
+  {
+    "id": "faq_006",
+    "category": "payments",
+    "question": "Are my payment details secure?",
+    "answer": "Yes, we use industry-standard SSL encryption to protect your payment information. We are PCI DSS compliant and never store your full credit card details on our servers. All transactions are processed through secure payment gateways.",
+    "tags": ["security", "payment security", "SSL", "PCI compliance"],
+    "metadata": {
+      "last_updated": "2024-01-15",
+      "priority": "high"
+    }
+  },
+  {
+    "id": "faq_007",
+    "category": "products",
+    "question": "Do you offer warranty on products?",
+    "answer": "Yes, all products come with manufacturer warranties. Electronics typically have 1-year warranties, while appliances may have 2-3 year warranties. We also offer extended warranty options at checkout. Check individual product pages for specific warranty details.",
+    "tags": ["warranty", "product warranty", "extended warranty"],
+    "metadata": {
+      "last_updated": "2024-01-15",
+      "priority": "medium"
+    }
+  },
+  {
+    "id": "faq_008",
+    "category": "products",
+    "question": "How do I know if a product is in stock?",
+    "answer": "Product availability is shown on each product page. If an item is out of stock, you can sign up for restock notifications. We update inventory in real-time, so if you can add an item to your cart, it's available for purchase.",
+    "tags": ["stock", "inventory", "availability", "restock"],
+    "metadata": {
+      "last_updated": "2024-01-15",
+      "priority": "medium"
+    }
+  },
+  {
+    "id": "faq_009",
+    "category": "account",
+    "question": "How do I create an account?",
+    "answer": "You can create an account by clicking 'Sign Up' at the top of any page. You'll need to provide your email address, create a password, and verify your email. You can also sign up using your Google or Facebook account for faster registration.",
+    "tags": ["account creation", "sign up", "registration"],
+    "metadata": {
+      "last_updated": "2024-01-15",
+      "priority": "medium"
+    }
+  },
+  {
+    "id": "faq_010",
+    "category": "account",
+    "question": "I forgot my password. How do I reset it?",
+    "answer": "Click 'Forgot Password' on the login page and enter your email address. We'll send you a password reset link. Click the link in the email and follow the instructions to create a new password. The reset link expires in 24 hours.",
+    "tags": ["password reset", "forgot password", "login help"],
+    "metadata": {
+      "last_updated": "2024-01-15",
+      "priority": "medium"
+    }
+  },
+  {
+    "id": "faq_011",
+    "category": "discounts",
+    "question": "How do I use a discount code?",
+    "answer": "Enter your discount code in the 'Promo Code' field during checkout. The discount will be applied to your order total. Discount codes cannot be combined with other offers unless specifically stated. Check the terms and conditions for each code.",
+    "tags": ["discount codes", "promo codes", "coupons", "checkout"],
+    "metadata": {
+      "last_updated": "2024-01-15",
+      "priority": "medium"
+    }
+  },
+  {
+    "id": "faq_012",
+    "category": "discounts",
+    "question": "Do you have a loyalty program?",
+    "answer": "Yes, our VIP Rewards program offers points for every purchase, exclusive discounts, early access to sales, and free shipping on all orders. You earn 1 point for every dollar spent, and 100 points equals $5 in rewards. Join for free in your account settings.",
+    "tags": ["loyalty program", "VIP rewards", "points", "membership"],
+    "metadata": {
+      "last_updated": "2024-01-15",
+      "priority": "low"
+    }
+  },
+  {
+    "id": "faq_013",
+    "category": "support",
+    "question": "How can I contact customer service?",
+    "answer": "You can reach our customer service team via live chat (available 24/7), email at support@ecommerce.com, or phone at 1-800-SUPPORT. We also have a comprehensive help center with articles and tutorials. Average response time is under 2 hours.",
+    "tags": ["customer service", "support", "contact", "help"],
+    "metadata": {
+      "last_updated": "2024-01-15",
+      "priority": "high"
+    }
+  },
+  {
+    "id": "faq_014",
+    "category": "support",
+    "question": "What are your business hours?",
+    "answer": "Our online store is available 24/7. Customer service is available Monday-Friday 8AM-8PM EST, and weekends 10AM-6PM EST. Live chat is available 24/7 with instant responses. Phone support follows the same hours as customer service.",
+    "tags": ["business hours", "support hours", "availability"],
+    "metadata": {
+      "last_updated": "2024-01-15",
+      "priority": "low"
+    }
+  },
+  {
+    "id": "faq_015",
+    "category": "technical",
+    "question": "Why is the website running slowly?",
+    "answer": "Website performance can be affected by your internet connection, browser cache, or high traffic. Try clearing your browser cache, using a different browser, or checking your internet connection. If issues persist, contact our technical support team.",
+    "tags": ["website performance", "slow loading", "technical issues"],
+    "metadata": {
+      "last_updated": "2024-01-15",
+      "priority": "low"
+    }
+  }
+]

@@ -8,6 +8,7 @@ import apolloClient from './lib/apollo-client';
 import Home from "@/pages/home";
 import AdminPage from "@/pages/admin";
 import IntelligentUIPage from "@/pages/intelligent-ui";
+import DynamicUITest from "@/components/ui/dynamic-ui-test";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -16,6 +17,7 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/admin" component={AdminPage} />
       <Route path="/intelligent-ui" component={IntelligentUIPage} />
+      <Route path="/ui-test" component={DynamicUITest} />
       <Route component={NotFound} />
     </Switch>
   );

@@ -27,7 +27,7 @@ class LLMConfig:
     def _get_ollama_llm(self, temperature: float) -> ChatOpenAI:
         """Configure Ollama LLM"""
         base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-        model = os.getenv("OLLAMA_MODEL", "gemma3:12b")
+        model = os.getenv("OLLAMA_MODEL", "gemma2:12b")
         
         return ChatOpenAI(
             model=model,
@@ -58,7 +58,7 @@ class LLMConfig:
         if self.provider == "ollama":
             return {
                 "provider": "ollama",
-                "model": os.getenv("OLLAMA_MODEL", "gemma:12b"),
+                "model": os.getenv("OLLAMA_MODEL", "gemma2:12b"),
                 "base_url": os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
                 "cost": "free",
                 "privacy": "local"

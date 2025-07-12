@@ -467,6 +467,16 @@ const Home: React.FC = () => {
                 <i className="ri-robot-line mr-1"></i>
                 AI Assistant
               </Button>
+              
+              <Button 
+                size="sm" 
+                variant="outline"
+                className="border-purple-300 text-purple-700 hover:bg-purple-50"
+                onClick={() => navigate('/ui-test')}
+              >
+                <i className="ri-test-tube-line mr-1"></i>
+                UI Test
+              </Button>
             </div>
           </div>
         </div>

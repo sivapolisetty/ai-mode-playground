@@ -6,6 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
+import { DynamicUIRenderer, useDynamicUI, type DynamicUISpec } from '@/components/ui/dynamic-ui-renderer';
 
 interface Customer {
   id: string;
@@ -20,13 +21,19 @@ interface ConversationEntry {
   type: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  uiSpec?: DynamicUISpec; // Add UI specification for enhanced messages
 }
 
 interface ChatResponse {
   message: string;
+  ui_components?: any[];
+  layout_strategy?: string;
+  user_intent?: string;
+  response_type?: string;
   session_id: string;
   timestamp: string;
   debug?: any;
+  validation?: any;
 }
 
 export default function IntelligentUIPage() {
@@ -38,6 +45,9 @@ export default function IntelligentUIPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  
+  // Dynamic UI state
+  const { handleAction } = useDynamicUI();
 
   // Check for customer ID in URL parameters
   useEffect(() => {
@@ -145,12 +155,13 @@ export default function IntelligentUIPage() {
     }
   };
 
-  const addMessage = async (type: 'user' | 'assistant', content: string, saveToDatabase = true) => {
+  const addMessage = async (type: 'user' | 'assistant', content: string, saveToDatabase = true, uiSpec?: DynamicUISpec) => {
     const newMessage: ConversationEntry = {
       id: crypto.randomUUID(),
       type,
       content,
       timestamp: new Date(),
+      ...(uiSpec && { uiSpec })
     };
     setConversation(prev => [...prev, newMessage]);
 
@@ -212,7 +223,8 @@ export default function IntelligentUIPage() {
           message: currentInput,
           context: {
             customerId: selectedCustomerId,
-            currentView: 'intelligent-ui'
+            currentView: 'intelligent-ui',
+            session_id: sessionId
           }
         }),
       });
@@ -222,7 +234,28 @@ export default function IntelligentUIPage() {
       }
 
       const data: ChatResponse = await response.json();
-      addMessage('assistant', data.message);
+      
+      // Create UI specification if components are present
+      let uiSpec: DynamicUISpec | undefined;
+      if (data.ui_components && data.ui_components.length > 0) {
+        uiSpec = {
+          ui_components: data.ui_components,
+          layout_strategy: data.layout_strategy || 'text_only',
+          user_intent: data.user_intent || 'unknown',
+          validation: data.validation
+        };
+      }
+      
+      addMessage('assistant', data.message, true, uiSpec);
+      
+      // Log UI generation info
+      if (uiSpec) {
+        console.log('🎨 Dynamic UI Generated:', {
+          components: uiSpec.ui_components.length,
+          layout: uiSpec.layout_strategy,
+          intent: uiSpec.user_intent
+        });
+      }
 
     } catch (error) {
       console.error('Error processing input:', error);
@@ -363,7 +396,7 @@ export default function IntelligentUIPage() {
                   </div>
                 )}
                 
-                <div className={`max-w-3xl ${message.type === 'user' ? 'order-first' : ''}`}>
+                <div className={`max-w-4xl ${message.type === 'user' ? 'order-first' : ''}`}>
                   <div className={`rounded-lg px-4 py-2 ${
                     message.type === 'user' 
                       ? 'bg-blue-600 text-white ml-12' 
@@ -371,8 +404,42 @@ export default function IntelligentUIPage() {
                   }`}>
                     <p className="whitespace-pre-wrap">{message.content}</p>
                   </div>
-                  <div className="text-xs text-gray-500 mt-1 px-2">
-                    {message.timestamp.toLocaleTimeString()}
+                  
+                  {/* Dynamic UI Components */}
+                  {message.uiSpec && (
+                    <div className="mt-3 px-2">
+                      <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-4">
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="w-5 h-5 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
+                            <i className="ri-magic-line text-white text-xs"></i>
+                          </div>
+                          <span className="text-sm font-medium text-gray-700">Interactive UI</span>
+                          <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                            {message.uiSpec.layout_strategy}
+                          </span>
+                        </div>
+                        
+                        <DynamicUIRenderer
+                          uiSpec={message.uiSpec}
+                          onAction={handleAction}
+                          context={{
+                            customerId: selectedCustomerId,
+                            sessionId: sessionId,
+                            customer: selectedCustomer
+                          }}
+                          className="dynamic-ui-message"
+                        />
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="text-xs text-gray-500 mt-1 px-2 flex items-center gap-2">
+                    <span>{message.timestamp.toLocaleTimeString()}</span>
+                    {message.uiSpec && (
+                      <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded text-xs">
+                        🎨 {message.uiSpec.ui_components.length} UI components
+                      </span>
+                    )}
                   </div>
                 </div>
 

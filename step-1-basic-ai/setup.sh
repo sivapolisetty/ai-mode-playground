@@ -180,27 +180,34 @@ configure_ollama() {
     # Update .env for Ollama
     sed -i.bak 's/LLM_PROVIDER=.*/LLM_PROVIDER=ollama/' .env
     
-    # Ask for model preference
+    # Standardize to Gemma2:12B for consistency across all steps
     echo
-    print_status "Choose Gemma model:"
-    echo "1) gemma2:2b (Faster, lower memory usage)"
-    echo "2) gemma2:9b (Better quality, more memory)"
-    echo "3) gemma3:12b (Latest, best quality)"
-    echo
+    print_status "Using standardized Gemma2 12B model for consistency"
+    OLLAMA_MODEL="gemma2:12b"
     
-    read -p "Choose model (1-3, default: 3): " model_choice
+    # Option to override if needed
+    read -p "Use different model? (y/n, default: n): " use_different
     
-    case $model_choice in
-        1)
-            OLLAMA_MODEL="gemma2:2b"
-            ;;
-        2)
-            OLLAMA_MODEL="gemma2:9b"
-            ;;
-        *)
-            OLLAMA_MODEL="gemma3:12b"
-            ;;
-    esac
+    if [[ $use_different =~ ^[Yy]$ ]]; then
+        echo "1) gemma2:2b (Faster, lower memory usage)"
+        echo "2) gemma2:9b (Good balance)"
+        echo "3) gemma2:12b (Best quality - recommended)"
+        echo
+        
+        read -p "Choose model (1-3, default: 3): " model_choice
+        
+        case $model_choice in
+            1)
+                OLLAMA_MODEL="gemma2:2b"
+                ;;
+            2)
+                OLLAMA_MODEL="gemma2:9b"
+                ;;
+            *)
+                OLLAMA_MODEL="gemma2:12b"
+                ;;
+        esac
+    fi
     
     sed -i.bak "s/OLLAMA_MODEL=.*/OLLAMA_MODEL=$OLLAMA_MODEL/" .env
     
@@ -260,10 +267,10 @@ install_ollama() {
     ollama serve &
     sleep 2
     
-    # Pull Gemma model (default to 3:12b)
-    print_status "Downloading Gemma3 12B model..."
-    ollama pull gemma3:12b
-    print_success "Gemma3 12B model ready"
+    # Pull Gemma model (default to 2:12b)
+    print_status "Downloading Gemma2 12B model..."
+    ollama pull gemma2:12b
+    print_success "Gemma2 12B model ready"
 }
 
 # Function to configure OpenRouter
@@ -343,45 +350,17 @@ setup_langfuse_docker() {
         return 1
     fi
     
-    # Create LangFuse docker-compose file
-    cat > docker-compose.langfuse.yml << 'EOF'
-services:
-  langfuse-db:
-    image: postgres:15
-    restart: always
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: langfuse
-    ports:
-      - "5433:5432"
-    volumes:
-      - langfuse_db:/var/lib/postgresql/data
-
-  langfuse-server:
-    image: langfuse/langfuse:latest
-    depends_on:
-      - langfuse-db
-    ports:
-      - "3001:3000"
-    environment:
-      DATABASE_URL: postgresql://postgres:postgres@langfuse-db:5432/langfuse
-      NEXTAUTH_SECRET: mysecret
-      SALT: mysalt
-      NEXTAUTH_URL: http://localhost:3001
-      TELEMETRY_ENABLED: ${TELEMETRY_ENABLED:-true}
-      NEXT_PUBLIC_SIGN_UP_DISABLED: ${NEXT_PUBLIC_SIGN_UP_DISABLED:-false}
-      LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES: ${LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES:-false}
-
-volumes:
-  langfuse_db:
-EOF
+    # Check if observability directory exists
+    if [ ! -d "../../observability" ]; then
+        print_error "Observability directory not found. Please run this from the correct location."
+        return 1
+    fi
     
-    print_success "LangFuse docker-compose.yml created"
-    
-    # Start LangFuse
+    # Start LangFuse using the observability docker-compose
     print_status "Starting LangFuse with Docker..."
+    cd ../../observability
     docker-compose -f docker-compose.langfuse.yml up -d
+    cd - > /dev/null
     
     if [ $? -eq 0 ]; then
         print_success "LangFuse started successfully!"
