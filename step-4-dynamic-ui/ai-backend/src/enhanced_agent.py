@@ -20,6 +20,7 @@ from config.logging_config import logging_config
 from tools.mcp_tools import MCPTools
 from rag_service import RAGService, QueryType
 from shared.observability.langfuse_client import langfuse_client
+from prompts.prompt_manager import prompt_manager
 
 logger = logging_config.get_logger(__name__)
 
@@ -252,38 +253,8 @@ class EnhancedAgent:
     async def _create_transactional_plan(self, user_query: str, session_state: Dict[str, Any], trace_id: str = None) -> Dict[str, Any]:
         """Create plan for transactional queries (same as Step 1)"""
         # Use LLM to determine transactional tools
-        system_prompt = self._create_transactional_system_prompt()
-        
-        user_prompt = f"""
-User Query: "{user_query}"
-Session Context: {json.dumps(session_state, indent=2)}
-
-Analyze the user query and determine:
-1. What tool(s) should be called
-2. What parameters to pass
-3. How to respond to the user
-
-Available Tools:
-- search_products: Search for products by name/description
-- get_products: Get all products (with optional filters)
-- get_customers: Get all customers
-- get_customer_orders: Get orders for a customer
-- create_order: Create a new order
-- get_categories: Get product categories
-
-Respond with JSON only:
-{{
-    "tool_calls": [
-        {{
-            "tool": "tool_name",
-            "parameters": {{"param": "value"}},
-            "reasoning": "why this tool"
-        }}
-    ],
-    "session_updates": {{"key": "value"}},
-    "response_strategy": "how to format response"
-}}
-"""
+        system_prompt = prompt_manager.get_transactional_system_prompt()
+        user_prompt = prompt_manager.get_transactional_user_prompt(user_query, session_state)
         
         messages = [
             SystemMessage(content=system_prompt),
@@ -471,27 +442,12 @@ Respond with JSON only:
                 context_parts.append(f"Tool Results:\n{chr(10).join(tool_context)}")
         
         # Create response generation prompt
-        prompt = f"""
-Original Query: "{original_query}"
-Strategy: {strategy}
-Available Context: {chr(10).join(context_parts)}
-
-Generate a helpful, conversational response that:
-1. Directly addresses the user's question
-2. Uses information from knowledge base when available
-3. Incorporates tool results when relevant
-4. Is natural and friendly in tone
-5. Provides actionable information
-
-If both knowledge base and tool results are available, synthesize them intelligently.
-If only knowledge base is available, provide a complete answer from that.
-If only tool results are available, format them conversationally.
-"""
+        prompt = prompt_manager.get_response_generation_prompt(original_query, strategy, context_parts)
         
         try:
             # Generate text response
             messages = [
-                SystemMessage(content="You are a helpful e-commerce assistant. Generate natural, conversational responses that combine knowledge base information with transactional data effectively."),
+                SystemMessage(content=prompt_manager.get_response_system_prompt()),
                 HumanMessage(content=prompt)
             ]
             
@@ -536,24 +492,6 @@ If only tool results are available, format them conversationally.
                 "response_type": "error"
             }
     
-    def _create_transactional_system_prompt(self) -> str:
-        """Create system prompt for transactional analysis"""
-        return """You are an AI assistant that analyzes e-commerce queries and determines which tools to call.
-
-Your job is to:
-1. Understand what the user wants
-2. Choose the right tool(s) to call
-3. Provide appropriate parameters
-4. Plan how to respond
-
-Guidelines:
-- For product searches: use search_products with query terms
-- For browsing: use get_products 
-- For customer info: use get_customers or get_customer_orders
-- For ordering: use create_order (needs customer_id, product_id, shipping_address)
-- For categories: use get_categories
-
-Always respond with valid JSON only."""
     
     def _extract_json_from_response(self, response: str) -> str:
         """Extract JSON content from LLM response"""
@@ -665,60 +603,9 @@ Always respond with valid JSON only."""
             context_summary = self._prepare_context_summary(context)
             
             # Build LLM prompt for UI generation
-            ui_generation_prompt = f"""
-            TASK: Generate dynamic UI component specifications for an e-commerce application.
-            
-            USER QUERY: "{user_query}"
-            
-            CONTEXT INFORMATION:
-            {context_summary}
-            
-            DATA AVAILABLE:
-            {data_summary}
-            
-            AVAILABLE UI COMPONENTS:
-            {component_summary}
-            
-            INSTRUCTIONS:
-            1. Analyze the user query and available data to understand what UI would be most helpful
-            2. Select appropriate components from the available library
-            3. Generate component specifications that enhance the user experience
-            4. Focus on making data interactive and actionable
-            5. Return valid JSON specification only
-            
-            COMPONENT SPECIFICATION FORMAT:
-            {{
-              "ui_components": [
-                {{
-                  "type": "component_name",
-                  "props": {{
-                    "key": "value"
-                  }},
-                  "children": "content or data",
-                  "actions": [
-                    {{
-                      "event": "onClick",
-                      "action": "api_call",
-                      "payload": {{"endpoint": "/api/...", "data": {{}}}}
-                    }}
-                  ],
-                  "layout": {{
-                    "position": "inline",
-                    "priority": "high"
-                  }}
-                }}
-              ],
-              "layout_strategy": "single_component",
-              "user_intent": "intent description"
-            }}
-            
-            EXAMPLES:
-            - Product search queries → Product grid with cards and filters
-            - Order queries → Order status cards with action buttons  
-            - Customer queries → Profile forms and information displays
-            
-            RESPOND WITH VALID JSON ONLY:
-            """
+            ui_generation_prompt = prompt_manager.get_ui_generation_prompt(
+                user_query, context_summary, data_summary, component_summary
+            )
             
             # Generate UI specification with LLM
             response = await self.ui_llm.ainvoke(ui_generation_prompt)
