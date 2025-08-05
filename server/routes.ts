@@ -1,7 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { setupApolloServer } from "./graphql";
 import { initializeDatabase, db } from "./db";
 import { seedEcommerceDatabase } from "./db/ecommerce-seed";
 import { z } from "zod";
@@ -28,8 +27,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Seed database with ecommerce data
   await seedEcommerceDatabase();
 
-  // Setup GraphQL server (for read operations)
-  await setupApolloServer(app, httpServer);
   
   // Health check endpoint
   app.get('/health', (req, res) => {
@@ -38,8 +35,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       timestamp: new Date().toISOString(),
       version: '1.0.0',
       services: {
-        database: 'connected',
-        graphql: 'active'
+        database: 'connected'
       }
     });
   });

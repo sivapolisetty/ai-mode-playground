@@ -104,8 +104,8 @@ async def chat_endpoint(request: ChatRequest):
     
     # Create LangFuse trace
     trace_id = langfuse_client.create_trace(
+        user_message=request.message,
         session_id=session_id,
-        user_input=request.message,
         metadata=request.context
     )
     
@@ -134,14 +134,23 @@ async def chat_endpoint(request: ChatRequest):
         )
         
         # Update LangFuse trace with final output
-        langfuse_client.update_trace(trace_id, response_data.get("message", ""), {
-            "success": True,
-            "strategy": execution_plan.get("strategy"),
-            "knowledge_results_count": len(execution_plan.get("knowledge_results", [])),
-            "tool_results_count": len(tool_results),
-            "ui_components_count": len(response_data.get("ui_components", [])),
-            "response_type": response_data.get("response_type", "text_only")
-        })
+        langfuse_client.log_conversation_end(
+            trace_id=trace_id,
+            response=response_data.get("message", ""),
+            response_type=response_data.get("response_type", "text_only"),
+            total_execution_time=0,
+            components_summary={
+                "strategy": execution_plan.get("strategy"),
+                "knowledge_results_count": len(execution_plan.get("knowledge_results", [])),
+                "tool_results_count": len(tool_results),
+                "ui_components_count": len(response_data.get("ui_components", [])),
+                "total_components": len(response_data.get("ui_components", []))
+            },
+            metadata={
+                "success": True,
+                "response_type": response_data.get("response_type", "text_only")
+            }
+        )
         
         # Flush LangFuse data
         langfuse_client.flush()
@@ -167,7 +176,14 @@ async def chat_endpoint(request: ChatRequest):
         
     except Exception as e:
         logger.error(f"Enhanced chat processing failed: {e}")
-        langfuse_client.update_trace(trace_id, "", {"success": False, "error": str(e)})
+        langfuse_client.log_conversation_end(
+            trace_id=trace_id,
+            response=f"Error: {str(e)}",
+            response_type="error",
+            total_execution_time=0,
+            components_summary={"error": True},
+            metadata={"success": False, "error": str(e)}
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/knowledge/search")

@@ -350,7 +350,11 @@ class EnhancedAgent:
             
             try:
                 if tool_name == "search_products":
+                    logger.info(f"🔍 Executing search_products with parameters: {parameters}")
+                    logger.info(f"🔍 MCP Tools API URL: {self.mcp_tools.api_url}")
                     result = await self.mcp_tools.search_products(**parameters)
+                    logger.info(f"🔍 Search result: {result}")
+                    logger.info(f"🔍 Search result count: {result.get('count', 0)} products found")
                 elif tool_name == "get_products":
                     result = await self.mcp_tools.get_products(**parameters)
                 elif tool_name == "get_customers":
@@ -374,6 +378,8 @@ class EnhancedAgent:
                     tool_name=tool_name,
                     input_data=parameters,
                     output_data=result,
+                    success=True,
+                    execution_time=tool_duration / 1000,
                     metadata={"duration_ms": tool_duration, "reasoning": reasoning}
                 )
                 
@@ -392,6 +398,9 @@ class EnhancedAgent:
                     tool_name=tool_name,
                     input_data=parameters,
                     output_data=error_result,
+                    success=False,
+                    execution_time=tool_duration / 1000,
+                    error_message=str(e),
                     metadata={"duration_ms": tool_duration, "error": str(e)}
                 )
         

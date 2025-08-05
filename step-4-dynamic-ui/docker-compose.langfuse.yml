@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  langfuse-db:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: langfuse
+      POSTGRES_PASSWORD: langfuse
+      POSTGRES_DB: langfuse
+    volumes:
+      - langfuse_db:/var/lib/postgresql/data
+    ports:
+      - "5434:5432"
+
+  langfuse-clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    restart: always
+    environment:
+      CLICKHOUSE_DB: langfuse
+      CLICKHOUSE_USER: langfuse
+      CLICKHOUSE_PASSWORD: langfuse
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    volumes:
+      - langfuse_clickhouse:/var/lib/clickhouse
+    ports:
+      - "8124:8123"  # Use different port to avoid conflicts
+      - "9001:9000"
+
+  langfuse:
+    image: ghcr.io/langfuse/langfuse:latest
+    restart: always
+    depends_on:
+      - langfuse-db
+      - langfuse-clickhouse
+    ports:
+      - "3001:3000"
+    environment:
+      DATABASE_URL: postgresql://langfuse:langfuse@langfuse-db:5432/langfuse
+      CLICKHOUSE_URL: http://langfuse:langfuse@langfuse-clickhouse:8123/langfuse
+      NEXTAUTH_SECRET: step4-dynamic-ui-secret-key-2024
+      NEXTAUTH_URL: http://localhost:3001
+      TELEMETRY_ENABLED: false
+      LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES: true
+      LANGFUSE_DEFAULT_PROJECT_ID: step4-dynamic-ui
+      LANGFUSE_DEFAULT_PROJECT_NAME: "Step 4 Dynamic UI"
+    volumes:
+      - langfuse_uploads:/app/uploads
+
+volumes:
+  langfuse_db:
+  langfuse_clickhouse:
+  langfuse_uploads:

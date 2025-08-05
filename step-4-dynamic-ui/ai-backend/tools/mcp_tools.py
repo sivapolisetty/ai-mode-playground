@@ -38,6 +38,23 @@ class MCPTools:
         
         logger.info(f"Initialized MCP tools with component path: {self.components_path}")
     
+    def _extract_product_terms(self, query: str) -> List[str]:
+        """Extract relevant product terms from natural language query"""
+        # Common stop words and question words to remove
+        stop_words = {
+            'what', "what's", 'is', 'the', 'price', 'of', 'how', 'much', 'does', 'cost', 
+            'show', 'me', 'find', 'search', 'for', 'get', 'buy', 'purchase',
+            'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'from',
+            'about', 'do', 'you', 'have', 'any', 'can', 'i', 'want', 'need',
+            'where', 'when', 'which', 'who', 'why', 'are', 'was', 'were', 'be'
+        }
+        
+        # Split query into words and remove stop words
+        words = query.lower().replace('?', '').replace(',', '').split()
+        product_terms = [word for word in words if word not in stop_words and len(word) > 1]
+        
+        return product_terms
+
     async def search_products(self, query: str, filters: Dict[str, Any] = None) -> Dict[str, Any]:
         """Search for products by query with enhanced filtering"""
         try:
@@ -47,21 +64,34 @@ class MCPTools:
             
             products = response.json()
             
-            # Enhanced search logic
+            # Enhanced search logic with term extraction
             matching_products = []
             query_lower = query.lower()
+            product_terms = self._extract_product_terms(query)
             
             for product in products:
                 name = product.get('name', '').lower()
                 description = product.get('description', '').lower()
                 brand = product.get('brand', '').lower()
                 category = product.get('category', '').lower()
+                model = product.get('model', '').lower() if product.get('model') else ''
                 
-                # Check for matches
-                if (query_lower in name or 
-                    query_lower in description or 
-                    query_lower in brand or
-                    query_lower in category):
+                # Check for exact substring match first (for simple queries)
+                exact_match = (query_lower in name or 
+                              query_lower in description or 
+                              query_lower in brand or
+                              query_lower in category)
+                
+                # Check for term-based matching (for natural language queries)
+                term_matches = 0
+                if product_terms:
+                    product_text = f"{name} {description} {brand} {category} {model}"
+                    for term in product_terms:
+                        if term in product_text:
+                            term_matches += 1
+                
+                # Match if exact match OR if majority of terms match
+                if exact_match or (product_terms and term_matches >= len(product_terms) * 0.6):
                     matching_products.append(product)
             
             # Apply additional filters if provided

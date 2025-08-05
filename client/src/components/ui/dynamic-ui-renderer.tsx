@@ -124,11 +124,24 @@ const COMPONENT_REGISTRY: Record<string, React.ComponentType<any>> = {
   tableheader: TableHeader,
   tablerow: TableRow,
   
-  // Navigation/Organization
-  tabs: Tabs,
+  // Navigation/Organization  
+  tabs: ({ children, defaultSelected, ...props }: any) => {
+    return (
+      <Tabs defaultValue={defaultSelected} {...props}>
+        <TabsList>
+          {children}
+        </TabsList>
+      </Tabs>
+    )
+  },
   tabscontent: TabsContent,
   tabslist: TabsList,
   tabstrigger: TabsTrigger,
+  TabsTrigger: ({ id, children, ...props }: any) => (
+    <TabsTrigger value={id} {...props}>
+      {children}
+    </TabsTrigger>
+  ),
   accordion: Accordion,
   accordioncontent: AccordionContent,
   accordionitem: AccordionItem,
@@ -354,6 +367,7 @@ const DynamicComponent: React.FC<DynamicComponentProps> = ({
     // Remove title from props since we handled it
     delete finalProps.title
   }
+  
   
   return (
     <Component
