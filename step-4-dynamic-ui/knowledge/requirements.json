@@ -1,0 +1,347 @@
+{
+  "requirements": [
+    {
+      "id": "req_electronics_holiday_2024",
+      "category": "seasonal_promotion",
+      "title": "High-Value Electronics Holiday Experience",
+      "description": "For electronics over $800 during holiday season, provide enhanced UI with financing options, extended warranty offers, and security verification notices",
+      "priority": 9,
+      "trigger_conditions": {
+        "data_context": "product.price > 800 AND product.category == 'electronics'",
+        "temporal_context": "current_date BETWEEN '2024-11-25' AND '2024-12-31'",
+        "user_intent": ["product_search", "product_view", "purchase_consideration"]
+      },
+      "ui_specifications": {
+        "enhanced_components": [
+          {
+            "type": "financing-options-card",
+            "priority": "high",
+            "props": {
+              "title": "0% APR Financing Available",
+              "description": "Qualified customers can finance this purchase with 0% APR for 12 months",
+              "variant": "promotional",
+              "className": "financing-promotion-card"
+            },
+            "position": "after_price"
+          },
+          {
+            "type": "security-verification-badge",
+            "priority": "medium",
+            "props": {
+              "title": "Enhanced Security",
+              "description": "Additional verification required for high-value purchases",
+              "icon": "shield-check",
+              "variant": "security"
+            },
+            "position": "header_badge"
+          },
+          {
+            "type": "warranty-promotion-notice",
+            "priority": "medium",
+            "props": {
+              "title": "Free Extended Warranty",
+              "description": "Get 2-year extended warranty at no extra cost with your purchase",
+              "variant": "promotional",
+              "className": "warranty-promotion"
+            },
+            "position": "after_description"
+          }
+        ],
+        "layout_modifications": {
+          "container_class": "high-value-holiday-product",
+          "emphasis": "premium_treatment",
+          "spacing": "generous"
+        },
+        "data_enhancements": [
+          "financing_eligibility",
+          "warranty_terms",
+          "security_verification_status"
+        ]
+      },
+      "business_logic": "High-value electronics during holiday season require enhanced purchase support and security messaging to improve conversion and customer confidence",
+      "keywords": ["electronics", "holiday", "high value", "financing", "warranty", "premium"],
+      "effective_dates": {
+        "start": "2024-11-25",
+        "end": "2024-12-31"
+      },
+      "created_by": "Product Marketing Team",
+      "created_date": "2024-11-01"
+    },
+    {
+      "id": "req_vip_customer_experience",
+      "category": "customer_tier",
+      "title": "VIP Customer Premium Experience", 
+      "description": "VIP customers should receive enhanced UI treatment with priority support access, exclusive offers, and expedited service options",
+      "priority": 8,
+      "trigger_conditions": {
+        "data_context": "customer.tier == 'vip' OR customer.total_purchases > 2000",
+        "user_intent": ["any"]
+      },
+      "ui_specifications": {
+        "enhanced_components": [
+          {
+            "type": "vip-status-banner",
+            "priority": "high",
+            "props": {
+              "title": "VIP Member",
+              "description": "Enjoy priority support and exclusive benefits",
+              "variant": "vip",
+              "className": "vip-member-banner"
+            },
+            "position": "page_top"
+          },
+          {
+            "type": "priority-support-card",
+            "priority": "high",
+            "props": {
+              "title": "Priority Support Available",
+              "description": "Direct access to VIP customer service - average response time under 5 minutes",
+              "action_text": "Contact VIP Support",
+              "variant": "priority"
+            },
+            "position": "sidebar"
+          },
+          {
+            "type": "exclusive-offers-section",
+            "priority": "medium",
+            "props": {
+              "title": "Exclusive VIP Offers",
+              "description": "Special discounts and early access available",
+              "variant": "exclusive"
+            },
+            "position": "after_main_content"
+          }
+        ],
+        "layout_modifications": {
+          "container_class": "vip-customer-experience",
+          "theme": "premium",
+          "priority_indicators": true
+        }
+      },
+      "business_logic": "VIP customers should receive differentiated experience to reinforce their status and encourage continued high-value engagement",
+      "keywords": ["VIP", "premium customer", "high value", "priority support", "exclusive"],
+      "created_by": "Customer Success Team",
+      "created_date": "2024-10-15"
+    },
+    {
+      "id": "req_low_stock_urgency",
+      "category": "inventory_management",
+      "title": "Low Stock Urgency Messaging",
+      "description": "When products have low stock (under 10 units), display urgency messaging and limit time offers to encourage immediate purchase",
+      "priority": 7,
+      "trigger_conditions": {
+        "data_context": "product.stock_quantity < 10 AND product.stock_quantity > 0",
+        "user_intent": ["product_view", "purchase_consideration"]
+      },
+      "ui_specifications": {
+        "enhanced_components": [
+          {
+            "type": "urgency-notice",
+            "priority": "high",
+            "props": {
+              "title": "Limited Stock",
+              "description": "Only {stock_quantity} left in stock - order soon!",
+              "variant": "warning",
+              "className": "stock-urgency-notice",
+              "pulsing": true
+            },
+            "position": "near_price"
+          },
+          {
+            "type": "countdown-timer",
+            "priority": "medium",
+            "props": {
+              "title": "Reserve Your Item",
+              "description": "Item held for 15 minutes",
+              "duration": 900,
+              "variant": "urgency"
+            },
+            "position": "after_add_to_cart"
+          }
+        ],
+        "layout_modifications": {
+          "container_class": "low-stock-product",
+          "urgency_styling": true,
+          "highlight_add_to_cart": true
+        }
+      },
+      "business_logic": "Low stock situations create natural urgency that can improve conversion rates when communicated effectively",
+      "keywords": ["low stock", "limited availability", "urgency", "scarcity"],
+      "created_by": "Inventory Management Team",
+      "created_date": "2024-09-20"
+    },
+    {
+      "id": "req_new_customer_onboarding",
+      "category": "customer_onboarding",
+      "title": "New Customer Welcome Experience",
+      "description": "First-time customers should receive welcoming UI with guided experience, discount offers, and helpful information",
+      "priority": 6,
+      "trigger_conditions": {
+        "data_context": "customer.account_age_days < 30 OR customer.order_count == 0",
+        "user_intent": ["any"]
+      },
+      "ui_specifications": {
+        "enhanced_components": [
+          {
+            "type": "welcome-banner",
+            "priority": "high",
+            "props": {
+              "title": "Welcome to Our Store!",
+              "description": "New customers get 10% off their first order",
+              "discount_code": "WELCOME10",
+              "variant": "welcome"
+            },
+            "position": "page_top"
+          },
+          {
+            "type": "guided-tour-prompt",
+            "priority": "medium",
+            "props": {
+              "title": "Need Help Getting Started?",
+              "description": "Take a quick tour to discover our features",
+              "action_text": "Start Tour",
+              "variant": "helpful"
+            },
+            "position": "floating_bottom_right"
+          },
+          {
+            "type": "customer-service-highlight",
+            "priority": "medium",
+            "props": {
+              "title": "We're Here to Help",
+              "description": "Questions? Our customer service team is standing by",
+              "contact_methods": ["chat", "phone", "email"],
+              "variant": "supportive"
+            },
+            "position": "sidebar"
+          }
+        ],
+        "layout_modifications": {
+          "container_class": "new-customer-experience",
+          "friendly_styling": true,
+          "help_prominency": "increased"
+        }
+      },
+      "business_logic": "New customers need additional support and incentives to complete their first purchase and build long-term relationship",
+      "keywords": ["new customer", "welcome", "onboarding", "first purchase", "discount"],
+      "created_by": "Customer Acquisition Team",
+      "created_date": "2024-08-30"
+    },
+    {
+      "id": "req_mobile_optimization",
+      "category": "responsive_design",
+      "title": "Mobile-First Complex Product Display",
+      "description": "Complex products (electronics with multiple specs) on mobile devices should use progressive disclosure and touch-optimized interactions",
+      "priority": 7,
+      "trigger_conditions": {
+        "data_context": "product.ui_complexity == 'high' OR product.category == 'electronics'",
+        "user_context": "device_type == 'mobile'",
+        "user_intent": ["product_view", "specification_review"]
+      },
+      "ui_specifications": {
+        "enhanced_components": [
+          {
+            "type": "collapsible-specs-card",
+            "priority": "high",
+            "props": {
+              "title": "Technical Specifications",
+              "collapsed_by_default": true,
+              "touch_friendly": true,
+              "variant": "mobile_optimized"
+            },
+            "position": "after_description"
+          },
+          {
+            "type": "image-gallery-mobile",
+            "priority": "high",
+            "props": {
+              "swipe_enabled": true,
+              "zoom_enabled": true,
+              "thumbnail_strip": false,
+              "variant": "mobile_gallery"
+            },
+            "position": "replace_image_section"
+          },
+          {
+            "type": "sticky-add-to-cart",
+            "priority": "medium",
+            "props": {
+              "position": "bottom_fixed",
+              "variant": "mobile_sticky",
+              "quick_buy_enabled": true
+            },
+            "position": "mobile_bottom_fixed"
+          }
+        ],
+        "layout_modifications": {
+          "container_class": "mobile-complex-product",
+          "mobile_optimized": true,
+          "progressive_disclosure": true
+        }
+      },
+      "business_logic": "Mobile users need simplified, touch-friendly interfaces for complex products while maintaining access to all information",
+      "keywords": ["mobile", "responsive", "complex product", "progressive disclosure", "touch"],
+      "created_by": "Mobile Experience Team",
+      "created_date": "2024-10-01"
+    },
+    {
+      "id": "req_cart_abandonment_prevention",
+      "category": "conversion_optimization",
+      "title": "Cart Abandonment Prevention",
+      "description": "When users add items to cart but show signs of leaving (mouse movement patterns, time spent), display retention incentives",
+      "priority": 8,
+      "trigger_conditions": {
+        "data_context": "cart.items_count > 0",
+        "user_behavior": "exit_intent OR prolonged_inactivity",
+        "user_intent": ["leaving", "hesitating"]
+      },
+      "ui_specifications": {
+        "enhanced_components": [
+          {
+            "type": "exit-intent-modal",
+            "priority": "high",
+            "props": {
+              "title": "Wait! Don't Leave Your Items Behind",
+              "description": "Complete your purchase and get free shipping",
+              "incentive": "free_shipping",
+              "variant": "exit_intent"
+            },
+            "position": "modal_overlay"
+          },
+          {
+            "type": "cart-value-progress",
+            "priority": "medium",
+            "props": {
+              "title": "You're close to free shipping!",
+              "threshold": 50,
+              "current_value": "cart.total_value",
+              "variant": "progress_incentive"
+            },
+            "position": "cart_summary"
+          }
+        ],
+        "layout_modifications": {
+          "urgency_elements": true,
+          "incentive_highlighting": true
+        }
+      },
+      "business_logic": "Cart abandonment costs significant revenue; targeted interventions at the right moment can recover many potential sales",
+      "keywords": ["cart abandonment", "exit intent", "conversion", "retention"],
+      "created_by": "Conversion Optimization Team",
+      "created_date": "2024-09-15"
+    }
+  ],
+  "metadata": {
+    "version": "1.0",
+    "last_updated": "2024-11-01",
+    "total_requirements": 6,
+    "categories": [
+      "seasonal_promotion",
+      "customer_tier", 
+      "inventory_management",
+      "customer_onboarding",
+      "responsive_design",
+      "conversion_optimization"
+    ]
+  }
+}

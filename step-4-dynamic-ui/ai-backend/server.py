@@ -112,26 +112,44 @@ async def chat_endpoint(request: ChatRequest):
     try:
         logger.info(f"Enhanced chat request: {request.message}")
         
-        # Process query with enhanced agent
-        execution_plan = await agent.process_query(request.message, request.context, trace_id)
+        # Process query with enhanced agent - try orchestration first, then intelligent processing
+        response_data = await agent.process_query_with_orchestration(request.message, request.context, trace_id)
         
-        # Execute transactional tools if needed
-        tool_results = []
-        if execution_plan.get("tool_calls"):
-            tool_results = await agent.execute_tools(
-                execution_plan["tool_calls"], 
-                session_id, 
-                trace_id
+        # Check if orchestration succeeded
+        if response_data.get("response_type") == "orchestrated_response":
+            # Orchestration succeeded, use the response directly
+            logger.info(f"✅ Using orchestration response")
+            # Add required fields for LangFuse compatibility
+            execution_plan = response_data.get("orchestration", {})
+            tool_results = []  # Tool results are embedded in orchestration response
+        elif response_data.get("response_type") in ["intelligent_with_ui", "context_required"]:
+            # Intelligent processing succeeded, use the response directly
+            logger.info(f"✅ Using intelligent response: {response_data.get('response_type')}")
+            # Add required fields for LangFuse compatibility
+            execution_plan = response_data.get("intent", {})
+            tool_results = response_data.get("tool_results", [])
+        else:
+            # Intelligent processing fell back, try the old system as backup
+            logger.info("🔄 Intelligent processing fell back, using traditional processing")
+            execution_plan = response_data  # The fallback returns traditional format
+            
+            # Execute transactional tools if needed
+            tool_results = []
+            if execution_plan.get("tool_calls"):
+                tool_results = await agent.execute_tools(
+                    execution_plan["tool_calls"], 
+                    session_id, 
+                    trace_id
+                )
+            
+            # Format response combining knowledge, tool results, and UI components
+            response_data = await agent.format_response(
+                execution_plan,
+                tool_results, 
+                request.message,
+                trace_id,
+                request.context
             )
-        
-        # Format response combining knowledge, tool results, and UI components
-        response_data = await agent.format_response(
-            execution_plan,
-            tool_results, 
-            request.message,
-            trace_id,
-            request.context
-        )
         
         # Update LangFuse trace with final output
         langfuse_client.log_conversation_end(
@@ -165,12 +183,14 @@ async def chat_endpoint(request: ChatRequest):
             "session_id": session_id,
             "strategy": execution_plan.get("strategy"),
             "debug": {
-                "tools_used": [tc["tool"] for tc in execution_plan.get("tool_calls", [])],
+                "tools_used": [tc["tool"] for tc in execution_plan.get("tool_calls", [])] if "tool_calls" in execution_plan else response_data.get("orchestration", {}).get("tools_used", []),
                 "knowledge_results": len(execution_plan.get("knowledge_results", [])),
                 "llm_provider": llm_config.provider,
                 "query_type": execution_plan.get("query_type"),
                 "ui_generation_enabled": True,
-                "validation": response_data.get("validation", {})
+                "validation": response_data.get("validation", {}),
+                "processing_type": "orchestration" if response_data.get("response_type") == "orchestrated_response" else "traditional",
+                "orchestration": response_data.get("orchestration", {}) if response_data.get("response_type") == "orchestrated_response" else None
             }
         }
         
@@ -543,7 +563,7 @@ async def shutdown_event():
 if __name__ == "__main__":
     import uvicorn
     
-    port = int(os.getenv("PORT", "8001"))
+    port = int(os.getenv("PORT", "8003"))
     
     logger.info("🚀 Starting AI Mode Backend - Step 4 (Dynamic UI Generation)")
     logger.info(f"   Port: {port}")

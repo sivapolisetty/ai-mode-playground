@@ -1,0 +1,275 @@
+{
+  "ui_patterns": [
+    {
+      "pattern_id": "progressive_disclosure_electronics",
+      "name": "Progressive Disclosure for Complex Products",
+      "description": "For products with extensive specifications, show essential information first with expandable sections for detailed specs",
+      "category": "information_architecture",
+      "applies_when": {
+        "product_complexity": "high",
+        "specification_count": "> 5",
+        "category": "electronics"
+      },
+      "ui_strategy": "progressive_disclosure",
+      "component_hierarchy": [
+        {
+          "level": 1,
+          "components": ["product-card", "basic-info-section"],
+          "purpose": "Essential information immediately visible"
+        },
+        {
+          "level": 2, 
+          "components": ["expandable-specs", "technical-details"],
+          "purpose": "Detailed specifications on demand"
+        },
+        {
+          "level": 3,
+          "components": ["comparison-tool", "compatibility-checker"],
+          "purpose": "Advanced features for informed buyers"
+        }
+      ],
+      "interaction_patterns": [
+        "click_to_expand",
+        "accordion_sections",
+        "tabbed_organization"
+      ],
+      "responsive_behavior": {
+        "mobile": "Single column, collapsible sections",
+        "tablet": "Two column layout with side-by-side specs",
+        "desktop": "Full layout with expandable overlay panels"
+      },
+      "business_impact": "Reduces cognitive load while maintaining information completeness",
+      "success_metrics": [
+        "time_to_purchase_decision",
+        "specification_section_engagement",
+        "conversion_rate_improvement"
+      ]
+    },
+    {
+      "pattern_id": "contextual_pricing_display",
+      "name": "Contextual Pricing Display",
+      "description": "Price presentation adapts based on customer tier, product value, and current promotions",
+      "category": "pricing_optimization",
+      "applies_when": {
+        "price_sensitivity": "high",
+        "customer_context_available": true,
+        "promotional_periods": "active"
+      },
+      "ui_strategy": "contextual_adaptation",
+      "component_variations": [
+        {
+          "condition": "customer.tier == 'vip'",
+          "components": ["vip-price-badge", "exclusive-discount-notice"],
+          "styling": "premium_highlight"
+        },
+        {
+          "condition": "product.price > 500",
+          "components": ["financing-options", "payment-plan-calculator"],
+          "styling": "value_emphasis"
+        },
+        {
+          "condition": "promotional_price_available",
+          "components": ["savings-badge", "limited-time-notice"],
+          "styling": "promotional_highlight"
+        }
+      ],
+      "personalization_factors": [
+        "customer_purchase_history",
+        "price_sensitivity_profile",
+        "preferred_payment_methods"
+      ],
+      "business_impact": "Increases perceived value and conversion rates through relevant pricing context",
+      "implementation_notes": "Requires customer data integration and real-time promotional system"
+    },
+    {
+      "pattern_id": "social_proof_integration",
+      "name": "Dynamic Social Proof Integration",
+      "description": "Social proof elements that adapt based on product popularity, customer reviews, and real-time activity",
+      "category": "trust_building",
+      "applies_when": {
+        "review_count": "> 0",
+        "recent_purchases": "available",
+        "trust_indicators_needed": true
+      },
+      "ui_strategy": "trust_amplification",
+      "component_types": [
+        {
+          "type": "review_summary_card",
+          "triggers": ["product_page_view", "purchase_consideration"],
+          "data_sources": ["customer_reviews", "rating_aggregate"]
+        },
+        {
+          "type": "recent_activity_ticker",
+          "triggers": ["user_hesitation", "prolonged_viewing"],
+          "data_sources": ["recent_purchases", "current_viewers"]
+        },
+        {
+          "type": "expert_recommendation_badge",
+          "triggers": ["high_value_product", "complex_decision"],
+          "data_sources": ["expert_reviews", "industry_awards"]
+        }
+      ],
+      "personalization_aspects": [
+        "similar_customer_reviews",
+        "location_based_activity",
+        "demographic_matching"
+      ],
+      "business_impact": "Reduces purchase anxiety and builds confidence through peer validation",
+      "ethical_considerations": [
+        "authentic_data_only",
+        "privacy_compliant",
+        "no_false_urgency"
+      ]
+    },
+    {
+      "pattern_id": "adaptive_navigation_flow",
+      "name": "Adaptive Navigation Flow",
+      "description": "Navigation and user flow that adapts based on user intent, device type, and contextual factors",
+      "category": "user_experience",
+      "applies_when": {
+        "user_intent_detected": true,
+        "device_context_available": true,
+        "journey_stage_identified": true
+      },
+      "ui_strategy": "flow_optimization",
+      "flow_variations": [
+        {
+          "user_type": "first_time_visitor",
+          "flow": ["welcome_orientation", "guided_discovery", "trust_building"],
+          "emphasis": "education_and_support"
+        },
+        {
+          "user_type": "returning_customer",
+          "flow": ["personalized_recommendations", "quick_reorder", "account_shortcuts"],
+          "emphasis": "efficiency_and_familiarity"
+        },
+        {
+          "user_type": "high_intent_buyer",
+          "flow": ["product_comparison", "detailed_specs", "expedited_checkout"],
+          "emphasis": "information_and_speed"
+        }
+      ],
+      "adaptive_elements": [
+        "navigation_menu_personalization",
+        "search_result_prioritization",
+        "checkout_flow_optimization"
+      ],
+      "business_impact": "Improves user satisfaction and conversion by removing friction from natural user journeys"
+    },
+    {
+      "pattern_id": "intelligent_error_recovery",
+      "name": "Intelligent Error Recovery",
+      "description": "Error handling that provides contextual solutions and alternative paths based on the specific failure scenario",
+      "category": "error_handling",
+      "applies_when": {
+        "error_occurred": true,
+        "user_context_available": true,
+        "alternative_solutions_exist": true
+      },
+      "ui_strategy": "proactive_problem_solving",
+      "error_scenarios": [
+        {
+          "error_type": "product_out_of_stock",
+          "recovery_components": ["alternative_products", "restock_notification", "similar_items"],
+          "messaging_tone": "helpful_and_solutions_focused"
+        },
+        {
+          "error_type": "payment_declined",
+          "recovery_components": ["alternative_payment_methods", "payment_assistance", "order_hold_option"],
+          "messaging_tone": "discreet_and_supportive"
+        },
+        {
+          "error_type": "shipping_restrictions",
+          "recovery_components": ["alternative_locations", "store_pickup_option", "contact_support"],
+          "messaging_tone": "understanding_and_helpful"
+        }
+      ],
+      "intelligent_features": [
+        "contextual_solution_suggestion",
+        "automated_alternative_search",
+        "proactive_customer_service_escalation"
+      ],
+      "business_impact": "Reduces abandonment rates and maintains customer satisfaction even when things go wrong"
+    },
+    {
+      "pattern_id": "micro_interaction_feedback",
+      "name": "Contextual Micro-Interaction Feedback",
+      "description": "Small interactive elements that provide immediate feedback and guidance based on user actions and context",
+      "category": "interaction_design",
+      "applies_when": {
+        "user_interaction_detected": true,
+        "feedback_beneficial": true,
+        "cognitive_load_manageable": true
+      },
+      "ui_strategy": "delightful_responsiveness",
+      "interaction_types": [
+        {
+          "trigger": "add_to_cart",
+          "feedback": ["item_added_animation", "cart_counter_update", "continue_shopping_suggestion"],
+          "personality": "encouraging_and_helpful"
+        },
+        {
+          "trigger": "wishlist_add",
+          "feedback": ["heart_fill_animation", "save_confirmation", "price_drop_notification_offer"],
+          "personality": "supportive_and_attentive"
+        },
+        {
+          "trigger": "comparison_add",
+          "feedback": ["comparison_counter_update", "quick_compare_preview", "comparison_completion_progress"],
+          "personality": "informative_and_efficient"
+        }
+      ],
+      "contextual_adaptations": [
+        "first_time_user_extra_guidance",
+        "mobile_device_touch_optimized",
+        "accessibility_enhanced_feedback"
+      ],
+      "business_impact": "Increases engagement and provides clear system feedback that builds user confidence"
+    }
+  ],
+  "pattern_relationships": [
+    {
+      "primary_pattern": "progressive_disclosure_electronics",
+      "related_patterns": ["contextual_pricing_display", "social_proof_integration"],
+      "relationship_type": "complementary",
+      "integration_notes": "Progressive disclosure can include contextual pricing and social proof at appropriate reveal levels"
+    },
+    {
+      "primary_pattern": "adaptive_navigation_flow", 
+      "related_patterns": ["intelligent_error_recovery", "micro_interaction_feedback"],
+      "relationship_type": "supportive",
+      "integration_notes": "Adaptive flows benefit from intelligent error handling and responsive feedback systems"
+    }
+  ],
+  "implementation_guidelines": {
+    "performance_considerations": [
+      "lazy_load_secondary_components",
+      "cache_contextual_data_appropriately", 
+      "optimize_for_mobile_first"
+    ],
+    "accessibility_requirements": [
+      "maintain_keyboard_navigation",
+      "provide_screen_reader_support",
+      "ensure_sufficient_color_contrast"
+    ],
+    "testing_strategies": [
+      "ab_test_pattern_effectiveness",
+      "measure_user_engagement_metrics",
+      "monitor_conversion_impact"
+    ]
+  },
+  "metadata": {
+    "version": "1.0",
+    "last_updated": "2024-11-01",
+    "total_patterns": 6,
+    "categories": [
+      "information_architecture",
+      "pricing_optimization", 
+      "trust_building",
+      "user_experience",
+      "error_handling",
+      "interaction_design"
+    ],
+    "created_by": "UX Intelligence Team"
+  }
+}

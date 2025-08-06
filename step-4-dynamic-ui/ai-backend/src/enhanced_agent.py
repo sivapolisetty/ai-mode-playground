@@ -18,6 +18,10 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '../../rag-service'))
 from config.llm_config import LLMConfig
 from config.logging_config import logging_config
 from tools.mcp_tools import MCPTools
+from tools.ui_component_tools import UIComponentTools
+from .intent_classifier import IntentClassifier
+from .context_resolver import ContextResolver
+from .intelligent_orchestrator import IntelligentOrchestrator
 from rag_service import RAGService, QueryType
 from shared.observability.langfuse_client import langfuse_client
 from prompts.prompt_manager import prompt_manager
@@ -36,6 +40,7 @@ class EnhancedAgent:
         
         # Initialize tools and services
         self.mcp_tools = MCPTools(traditional_api_url)
+        self.ui_component_tools = UIComponentTools()
         self.rag_service = RAGService()
         
         # Simple in-memory session storage
@@ -51,6 +56,12 @@ class EnhancedAgent:
         
         # Initialize component library
         self._initialize_ui_capabilities()
+        
+        # Initialize intelligent query processing
+        self.intent_classifier = IntentClassifier(self.llm)
+        self.context_resolver = ContextResolver(self.mcp_tools)
+        self.intelligent_orchestrator = IntelligentOrchestrator(self.llm, self.mcp_tools)
+        self.ui_component_tools = UIComponentTools()
     
     def get_session_state(self, session_id: str) -> Dict[str, Any]:
         """Get session state - simple in-memory storage"""
@@ -69,6 +80,128 @@ class EnhancedAgent:
         state = self.get_session_state(session_id)
         state.update(updates)
         logger.info(f"Updated session {session_id}: {updates}")
+    
+    async def process_query_with_orchestration(self, user_query: str, context: Dict[str, Any] = None, trace_id: str = None) -> Dict[str, Any]:
+        """
+        Process query using intelligent tool orchestration where LLM decides which tools to call
+        
+        This is the new approach that replaces hardcoded term extraction with LLM-driven
+        tool selection and multi-tool orchestration.
+        """
+        session_id = context.get("session_id", "default") if context else "default"
+        session_state = self.get_session_state(session_id)
+        
+        try:
+            logger.info(f"🎭 Processing query with intelligent orchestration: {user_query}")
+            
+            # Add session context to orchestrator context
+            orchestration_context = {**session_state, **(context or {})}
+            
+            # Use intelligent orchestrator to plan and execute tools
+            orchestration_result = await self.intelligent_orchestrator.orchestrate_query(
+                user_query, 
+                orchestration_context
+            )
+            
+            if not orchestration_result.get("success"):
+                logger.error(f"Orchestration failed: {orchestration_result.get('error')}")
+                # Fall back to traditional processing
+                return await self.process_query_intelligently(user_query, context, trace_id)
+            
+            # Update session with any new information
+            self.update_session_state(session_id, {
+                "last_query": user_query,
+                "last_orchestration": orchestration_result["reasoning"]
+            })
+            
+            # Generate UI components based on the results
+            ui_components = await self._generate_ui_components_from_orchestration(
+                user_query, 
+                orchestration_result,
+                context
+            )
+            
+            # Log orchestration success
+            tool_names = [tc["tool"] for tc in orchestration_result.get("tool_calls", [])]
+            logger.info(f"✅ Orchestration successful: {len(tool_names)} tools used: {tool_names}")
+            
+            return {
+                "response_type": "orchestrated_response",
+                "message": orchestration_result["response"],
+                "ui_components": ui_components,
+                "layout_strategy": "enhanced_with_ui" if ui_components else "text_only",
+                "user_intent": user_query,
+                "orchestration": {
+                    "reasoning": orchestration_result["reasoning"],
+                    "synthesis_reasoning": orchestration_result["synthesis_reasoning"],
+                    "tools_used": tool_names,
+                    "tool_results_count": len(orchestration_result.get("tool_results", []))
+                },
+                "suggested_actions": orchestration_result.get("suggested_actions", []),
+                "execution_time": 0  # TODO: Add timing
+            }
+            
+        except Exception as e:
+            logger.error(f"Orchestration processing failed: {e}")
+            # Fall back to traditional intelligent processing
+            return await self.process_query_intelligently(user_query, context, trace_id)
+    
+    async def process_query_intelligently(self, user_query: str, context: Dict[str, Any] = None, trace_id: str = None) -> Dict[str, Any]:
+        """
+        Process user query with intelligent intent understanding and context resolution
+        
+        This method replaces hardcoded routing with LLM-based intent classification
+        and dynamic context resolution for temporal references.
+        """
+        session_id = context.get("session_id", "default") if context else "default"
+        session_state = self.get_session_state(session_id)
+        
+        try:
+            logger.info(f"🧠 Processing query intelligently: {user_query}")
+            
+            # Step 1: Classify intent using LLM
+            intent = await self.intent_classifier.classify_intent(
+                user_query, 
+                {**session_state, **(context or {})}
+            )
+            
+            logger.info(f"Classified intent: {intent['intent_type']} (confidence: {intent.get('confidence', 0)})")
+            
+            # Step 2: Resolve contextual references
+            resolved_context = await self.context_resolver.resolve_references(intent, session_state)
+            
+            if resolved_context['resolution_status'] != 'success':
+                logger.warning(f"Context resolution issues: {resolved_context.get('resolution_errors', [])}")
+            
+            # Step 3: Build execution context
+            execution_context = self.context_resolver.build_execution_context(resolved_context)
+            
+            # Step 4: Check for missing context - but allow partial context for some operations
+            missing_context = self.context_resolver.get_missing_context(resolved_context)
+            if missing_context and resolved_context['resolution_status'] == 'failed':
+                return await self._handle_missing_context(user_query, intent, missing_context, trace_id)
+            
+            # Log context resolution results
+            logger.info(f"📋 Context resolution: {resolved_context['resolution_status']}, entities: {list(resolved_context.get('resolved_entities', {}).keys())}")
+            
+            # Step 5: Execute based on intent
+            if intent['intent_type'] in ['order_update', 'order_cancel', 'order_status']:
+                return await self._handle_order_operations(user_query, intent, execution_context, trace_id)
+            elif intent['intent_type'] in ['product_search', 'product_details']:
+                return await self._handle_product_operations(user_query, intent, execution_context, trace_id)
+            elif intent['intent_type'] in ['customer_update']:
+                return await self._handle_customer_operations(user_query, intent, execution_context, trace_id)
+            else:
+                # Fall back to original processing for other intents
+                return await self.process_query(user_query, context, trace_id)
+                
+        except Exception as e:
+            logger.error(f"❌ Intelligent query processing failed: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            # Fall back to original processing
+            logger.info("🔄 Falling back to original processing")
+            return await self.process_query(user_query, context, trace_id)
     
     async def process_query(self, user_query: str, context: Dict[str, Any] = None, trace_id: str = None) -> Dict[str, Any]:
         """
@@ -577,29 +710,441 @@ class EnhancedAgent:
             self.ui_generation_enabled = False
     
     async def generate_ui_response(self, user_query: str, execution_plan: Dict[str, Any], tool_results: List[Dict[str, Any]], context: Dict[str, Any] = None) -> Dict[str, Any]:
-        """Generate UI component specifications alongside text response"""
+        """Generate UI component specifications using intelligent component selection"""
         try:
             if not self.ui_generation_enabled:
-                return {"ui_components": [], "layout_strategy": "text_only"}
+                return {
+                    "ui_components": [], 
+                    "layout_strategy": "text_only",
+                    "user_intent": "Text-only response"
+                }
             
-            # Ensure we have component knowledge
-            await self._ensure_component_knowledge()
+            # Use intelligent component selection based on query and results  
+            ui_components, layout_strategy, user_intent = await self._generate_intelligent_ui_components(
+                user_query, execution_plan, tool_results, context or {}
+            )
             
-            if not self.component_library:
-                return {"ui_components": [], "layout_strategy": "text_only"}
+            if not ui_components:
+                return {
+                    "ui_components": [], 
+                    "layout_strategy": "text_only",
+                    "user_intent": user_intent
+                }
             
-            # Generate UI specification
-            ui_spec = await self._generate_ui_specification(user_query, execution_plan, tool_results, context or {})
+            # Create validation info
+            validation_info = {
+                "total_requested": len(ui_components),
+                "validated": len(ui_components),  # All components are pre-validated
+                "success": True
+            }
             
-            return ui_spec
+            return {
+                "ui_components": ui_components,
+                "layout_strategy": layout_strategy,
+                "user_intent": user_intent,
+                "validation": validation_info
+            }
             
         except Exception as e:
             logger.error(f"UI generation failed: {e}")
             return {
                 "ui_components": [],
-                "layout_strategy": "fallback",
+                "layout_strategy": "text_only", 
+                "user_intent": f"Error processing query: {user_query}",
                 "error": str(e)
             }
+    
+    async def _generate_ui_components_from_orchestration(self, user_query: str, orchestration_result: Dict[str, Any], context: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Generate UI components based on orchestration results"""
+        try:
+            tool_results = orchestration_result.get("tool_results", [])
+            
+            # Extract successful tool results with data
+            data_results = []
+            for tool_result in tool_results:
+                if tool_result.get("success") and "data" in tool_result.get("result", {}):
+                    data_results.append(tool_result)
+            
+            if not data_results:
+                return []
+            
+            # Determine the primary data type and generate appropriate UI components
+            primary_data_type = self._determine_primary_data_type(data_results)
+            
+            if primary_data_type == "products":
+                return await self._generate_product_ui_from_orchestration(data_results, user_query)
+            elif primary_data_type == "orders":
+                return await self._generate_order_ui_from_orchestration(data_results, user_query)
+            elif primary_data_type == "customers":
+                return await self._generate_customer_ui_from_orchestration(data_results, user_query)
+            else:
+                return await self._generate_generic_ui_from_orchestration(data_results, user_query)
+                
+        except Exception as e:
+            logger.error(f"UI generation from orchestration failed: {e}")
+            return []
+    
+    def _determine_primary_data_type(self, data_results: List[Dict[str, Any]]) -> str:
+        """Determine the primary data type from orchestration results"""
+        for result in data_results:
+            tool_name = result.get("tool", "")
+            if "product" in tool_name.lower():
+                return "products"
+            elif "order" in tool_name.lower():
+                return "orders"
+            elif "customer" in tool_name.lower():
+                return "customers"
+        return "generic"
+    
+    async def _generate_product_ui_from_orchestration(self, data_results: List[Dict[str, Any]], user_query: str) -> List[Dict[str, Any]]:
+        """Generate product UI components from orchestration results"""
+        components = []
+        
+        for result in data_results:
+            if "product" in result.get("tool", "").lower():
+                products = result.get("result", {}).get("data", [])
+                if products:
+                    # Generate product cards
+                    for product in products[:3]:  # Limit to 3 products
+                        components.append({
+                            "type": "card",
+                            "props": {
+                                "title": product.get("name", "Product"),
+                                "description": product.get("description", ""),
+                                "imageUrl": product.get("imageUrl", ""),
+                                "price": f"${product.get('price', 0)}",
+                                "metadata": {
+                                    "brand": product.get("brand", ""),
+                                    "model": product.get("model", "")
+                                }
+                            },
+                            "actions": [
+                                {
+                                    "type": "button",
+                                    "label": "View Details",
+                                    "action": "view_product",
+                                    "data": {"product_id": product.get("id")}
+                                },
+                                {
+                                    "type": "button", 
+                                    "label": "Add to Cart",
+                                    "action": "add_to_cart",
+                                    "data": {"product_id": product.get("id")}
+                                }
+                            ]
+                        })
+        
+        return components
+    
+    async def _generate_order_ui_from_orchestration(self, data_results: List[Dict[str, Any]], user_query: str) -> List[Dict[str, Any]]:
+        """Generate order UI components from orchestration results"""
+        components = []
+        
+        for result in data_results:
+            if "order" in result.get("tool", "").lower():
+                orders = result.get("result", {}).get("data", [])
+                if isinstance(orders, list):
+                    # Multiple orders
+                    for order in orders[:5]:  # Limit to 5 orders
+                        components.append({
+                            "type": "order_card",
+                            "props": {
+                                "order_id": order.get("id", ""),
+                                "status": order.get("status", ""),
+                                "total": f"${order.get('totalAmount', 0)}",
+                                "date": order.get("orderDate", ""),
+                                "items_count": len(order.get("items", []))
+                            },
+                            "actions": [
+                                {
+                                    "type": "button",
+                                    "label": "Track Order",
+                                    "action": "track_order",
+                                    "data": {"order_id": order.get("id")}
+                                }
+                            ]
+                        })
+                else:
+                    # Single order
+                    order = orders
+                    components.append({
+                        "type": "order_detail",
+                        "props": {
+                            "order_id": order.get("id", ""),
+                            "status": order.get("status", ""),
+                            "total": f"${order.get('totalAmount', 0)}",
+                            "date": order.get("orderDate", ""),
+                            "items": order.get("items", [])
+                        }
+                    })
+        
+        return components
+    
+    async def _generate_customer_ui_from_orchestration(self, data_results: List[Dict[str, Any]], user_query: str) -> List[Dict[str, Any]]:
+        """Generate customer UI components from orchestration results"""
+        components = []
+        
+        for result in data_results:
+            if "customer" in result.get("tool", "").lower():
+                customer_data = result.get("result", {}).get("data", {})
+                if customer_data:
+                    components.append({
+                        "type": "customer_profile",
+                        "props": {
+                            "name": customer_data.get("name", ""),
+                            "email": customer_data.get("email", ""),
+                            "address": customer_data.get("address", ""),
+                            "phone": customer_data.get("phone", "")
+                        },
+                        "actions": [
+                            {
+                                "type": "button",
+                                "label": "Edit Profile",
+                                "action": "edit_customer",
+                                "data": {"customer_id": customer_data.get("id")}
+                            }
+                        ]
+                    })
+        
+        return components
+    
+    async def _generate_generic_ui_from_orchestration(self, data_results: List[Dict[str, Any]], user_query: str) -> List[Dict[str, Any]]:
+        """Generate generic UI components from orchestration results"""
+        components = []
+        
+        # Simple data display component
+        for result in data_results:
+            tool_name = result.get("tool", "Unknown")
+            result_data = result.get("result", {})
+            
+            components.append({
+                "type": "data_display",
+                "props": {
+                    "title": f"Results from {tool_name}",
+                    "data": result_data.get("data", {}),
+                    "count": result_data.get("count", 0)
+                }
+            })
+        
+        return components
+    
+    async def _generate_intelligent_ui_components(self, user_query: str, execution_plan: Dict[str, Any], tool_results: List[Dict[str, Any]], context: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], str, str]:
+        """Generate UI components using intelligent component selection"""
+        try:
+            # Extract data from tool results
+            context_data = self._extract_context_data(tool_results, execution_plan)
+            
+            # Determine the primary workflow from query and results
+            workflow_type = self._determine_workflow_type(user_query, execution_plan, tool_results)
+            
+            # Get suitable components based on workflow and data
+            ui_components = []
+            
+            if workflow_type == "product_display":
+                ui_components = self._generate_product_ui_components(context_data)
+            elif workflow_type == "order_management":
+                ui_components = self._generate_order_ui_components(context_data)
+            elif workflow_type == "error_handling":
+                ui_components = self._generate_error_ui_components(context_data)
+            elif workflow_type == "general_inquiry":
+                ui_components = self._generate_general_ui_components(context_data, user_query)
+            else:
+                # Fallback to workflow-based component selection
+                ui_components = self.ui_component_tools.get_components_for_workflow(
+                    user_query, context_data
+                )
+            
+            # Determine layout strategy and user intent
+            layout_strategy = self._determine_layout_strategy(ui_components, execution_plan)
+            user_intent = self._determine_user_intent(user_query, workflow_type, context_data)
+            
+            return ui_components, layout_strategy, user_intent
+            
+        except Exception as e:
+            logger.error(f"Intelligent UI component generation failed: {e}")
+            return [], "text_only", f"Error processing query: {user_query}"
+    
+    def _extract_context_data(self, tool_results: List[Dict[str, Any]], execution_plan: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract relevant context data from tool results"""
+        context_data = {
+            "strategy": execution_plan.get("strategy", "unknown"),
+            "query_type": execution_plan.get("query_type"),
+            "has_data": bool(tool_results)
+        }
+        
+        # Extract product data
+        for result in tool_results:
+            if result.get("tool") == "search_products" and result.get("success"):
+                products = result.get("data", [])
+                if products:
+                    context_data["products"] = products
+                    context_data["product"] = products[0]  # First product for single display
+                    context_data["product_count"] = len(products)
+        
+        # Extract order data  
+        for result in tool_results:
+            if "order" in result.get("tool", "").lower() and result.get("success"):
+                if "data" in result and result["data"]:
+                    context_data["order"] = result["data"]
+                    context_data["orders"] = [result["data"]] if not isinstance(result["data"], list) else result["data"]
+        
+        # Extract customer data
+        for result in tool_results:
+            if "customer" in result.get("tool", "").lower() and result.get("success"):
+                if "data" in result:
+                    context_data["customer"] = result["data"]
+        
+        return context_data
+    
+    def _determine_workflow_type(self, user_query: str, execution_plan: Dict[str, Any], tool_results: List[Dict[str, Any]]) -> str:
+        """Determine the primary workflow type for UI generation"""
+        query_lower = user_query.lower()
+        strategy = execution_plan.get("strategy", "")
+        
+        # Check for product-related queries
+        if any(keyword in query_lower for keyword in ["product", "price", "iphone", "item", "catalog"]):
+            return "product_display"
+        
+        # Check for order-related queries
+        if any(keyword in query_lower for keyword in ["order", "purchase", "buy", "cart", "checkout"]):
+            return "order_management"
+        
+        # Check for error conditions
+        if strategy == "transactional_fallback" and not any(result.get("success", False) for result in tool_results):
+            return "error_handling"
+        
+        # Check for customer service queries
+        if any(keyword in query_lower for keyword in ["customer", "account", "profile", "help"]):
+            return "customer_service"
+        
+        return "general_inquiry"
+    
+    def _generate_product_ui_components(self, context_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Generate UI components for product display workflows"""
+        if "product" in context_data:
+            return self.ui_component_tools.get_components_for_product_display(context_data["product"])
+        return []
+    
+    def _generate_order_ui_components(self, context_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Generate UI components for order management workflows"""
+        if "order" in context_data:
+            return self.ui_component_tools.get_components_for_order_management(context_data["order"])
+        return []
+    
+    def _generate_error_ui_components(self, context_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Generate UI components for error handling scenarios"""
+        return [{
+            "type": "alert",
+            "props": {
+                "className": "max-w-md"
+            },
+            "children": [
+                {
+                    "type": "alerttitle", 
+                    "children": "No Results Found"
+                },
+                {
+                    "type": "alertdescription",
+                    "children": "We couldn't find what you're looking for. Please try a different search term or browse our product catalog."
+                }
+            ],
+            "layout": {"position": "inline", "priority": "high"}
+        }]
+    
+    def _generate_general_ui_components(self, context_data: Dict[str, Any], user_query: str) -> List[Dict[str, Any]]:
+        """Generate UI components for general inquiries"""
+        # Use workflow-based selection as fallback
+        return self.ui_component_tools.get_components_for_workflow(user_query, context_data)
+    
+    def _enhance_components_with_data(self, ui_components: List[Dict[str, Any]], context_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Enhance UI components with actual data from context"""
+        enhanced_components = []
+        
+        for component in ui_components:
+            enhanced_component = component.copy()
+            
+            # Enhance product-related components
+            if "product" in context_data and component.get("type") in ["card", "badge"]:
+                product = context_data["product"]
+                if component.get("type") == "card":
+                    enhanced_component["props"].update({
+                        "title": product.get("name", "Product"),
+                        "imageUrl": product.get("imageUrl"),
+                        "description": product.get("description", "")
+                    })
+                    # Add product details as children
+                    enhanced_component["children"] = [
+                        {
+                            "type": "text",
+                            "content": f"Price: ${product.get('price', '0.00')}",
+                            "className": "product-price"
+                        },
+                        {
+                            "type": "text", 
+                            "content": product.get("description", ""),
+                            "className": "product-description"
+                        }
+                    ]
+                elif component.get("type") == "badge":
+                    enhanced_component["props"]["children"] = f"${product.get('price', '0.00')}"
+            
+            # Enhance order-related components
+            if "order" in context_data and component.get("type") == "card":
+                order = context_data["order"]
+                enhanced_component["props"].update({
+                    "title": f"Order {order.get('id', 'N/A')}",
+                    "status": order.get("status", "Unknown")
+                })
+                enhanced_component["children"] = [
+                    {
+                        "type": "text",
+                        "content": f"Status: {order.get('status', 'Unknown')}",
+                        "className": "order-status"
+                    },
+                    {
+                        "type": "text",
+                        "content": f"Amount: ${order.get('amount', '0.00')}",
+                        "className": "order-amount"
+                    }
+                ]
+            
+            enhanced_components.append(enhanced_component)
+        
+        return enhanced_components
+    
+    def _determine_layout_strategy(self, ui_components: List[Dict[str, Any]], execution_plan: Dict[str, Any]) -> str:
+        """Determine the best layout strategy for the UI components"""
+        if not ui_components:
+            return "text_only"
+        
+        component_count = len(ui_components)
+        has_complex_components = any(
+            comp.get("metadata", {}).get("component_type") in ["organism", "template"] 
+            for comp in ui_components
+        )
+        
+        # Use layout strategies that the renderer understands
+        if component_count == 1:
+            return "single_component"
+        elif component_count <= 3:
+            return "composition"  # Renderer recognizes this
+        elif has_complex_components:
+            return "workflow"     # Renderer recognizes this  
+        else:
+            return "composition"  # Default to composition for multiple components
+    
+    def _determine_user_intent(self, user_query: str, workflow_type: str, context_data: Dict[str, Any]) -> str:
+        """Determine user intent for UI rendering"""
+        if workflow_type == "product_display":
+            if "product" in context_data:
+                return f"View product details for {context_data['product'].get('name', 'product')}"
+            return "Browse product information"
+        elif workflow_type == "order_management":
+            return "Manage order information"
+        elif workflow_type == "error_handling":
+            return "Handle search error"
+        else:
+            return f"Handle user query: {user_query[:50]}..."
     
     async def _generate_ui_specification(self, user_query: str, execution_plan: Dict[str, Any], tool_results: List[Dict[str, Any]], context: Dict[str, Any]) -> Dict[str, Any]:
         """Generate UI specification using LLM"""
@@ -744,6 +1289,283 @@ class EnhancedAgent:
         except Exception as e:
             logger.error(f"UI specification validation failed: {e}")
             return ui_spec
+    
+    # ========================================
+    # Intelligent Query Handlers
+    # ========================================
+    
+    async def _handle_missing_context(self, user_query: str, intent: Dict[str, Any], missing_context: List[str], trace_id: str = None) -> Dict[str, Any]:
+        """Handle queries that are missing required context"""
+        logger.info(f"Missing context for query: {missing_context}")
+        
+        missing_context_messages = {
+            'customer_authentication': "I need you to be logged in to help with that. Please sign in to your account first.",
+            'order_identification': "I couldn't find the specific order you're referring to. Could you provide the order number or be more specific?",
+            'product_specification': "I need more details about which product you're interested in. Could you be more specific?",
+            'last_order_reference': "I couldn't find your recent orders. Please make sure you're logged in, or specify which order you mean."
+        }
+        
+        messages = [missing_context_messages.get(ctx, f"Missing context: {ctx}") for ctx in missing_context]
+        response_message = " ".join(messages)
+        
+        # Generate helpful UI for missing context
+        ui_components = []
+        if 'customer_authentication' in missing_context:
+            ui_components.append({
+                "type": "alert",
+                "props": {"variant": "info"},
+                "children": [
+                    {"type": "alerttitle", "children": "Sign In Required"},
+                    {"type": "alertdescription", "children": "Please sign in to access your account information."}
+                ]
+            })
+            ui_components.append({
+                "type": "button",
+                "props": {"variant": "default", "className": "mt-4"},
+                "children": "Sign In",
+                "actions": [{"event": "onClick", "action": "navigate", "payload": {"url": "/login"}}]
+            })
+        
+        return {
+            "message": response_message,
+            "ui_components": ui_components,
+            "layout_strategy": "single_component" if ui_components else "text_only",
+            "user_intent": f"Handle missing context: {', '.join(missing_context)}",
+            "response_type": "context_required",
+            "missing_context": missing_context,
+            "debug": {"intent": intent, "missing_context": missing_context}
+        }
+    
+    async def _handle_order_operations(self, user_query: str, intent: Dict[str, Any], execution_context: Dict[str, Any], trace_id: str = None) -> Dict[str, Any]:
+        """Handle order-related operations (update, cancel, status)"""
+        logger.info(f"🔧 Handling order operation: {intent['intent_type']}")
+        
+        try:
+            intent_type = intent['intent_type']
+            target_order = execution_context.get('target_order')
+            order_id = execution_context.get('order_id')
+            customer = execution_context.get('customer')
+            
+            # If we don't have specific order but have customer, try to get their last order
+            if not target_order and not order_id and customer:
+                logger.info("🔍 No specific order found, trying to get customer's last order")
+                customer_id = customer.get('id') or customer.get('customer_id')
+                if customer_id:
+                    orders_result = await self.mcp_tools.get_customer_orders(customer_id, limit=1)
+                    if orders_result.get('success') and orders_result.get('data'):
+                        target_order = orders_result['data'][0] if isinstance(orders_result['data'], list) else orders_result['data']
+                        order_id = target_order.get('id')
+                        logger.info(f"✅ Found last order: {order_id}")
+            
+            if not target_order and not order_id:
+                logger.warning("❌ Could not identify any order to modify")
+                return await self._handle_missing_context(user_query, intent, ['order_identification'], trace_id)
+            
+            tool_results = []
+            
+            customer_id = customer.get('id') or customer.get('customer_id') if customer else None
+            
+            if intent_type == 'order_update':
+                # Extract what needs to be updated from the intent
+                updates = self._extract_order_updates(intent, user_query)
+                if updates:
+                    result = await self.mcp_tools.update_order(order_id, updates, customer_id)
+                    tool_results.append({"tool": "update_order", **result})
+                    
+            elif intent_type == 'order_cancel':
+                reason = self._extract_cancellation_reason(user_query)
+                result = await self.mcp_tools.cancel_order(order_id, reason)
+                tool_results.append({"tool": "cancel_order", **result})
+                
+            elif intent_type == 'order_status':
+                result = await self.mcp_tools.track_order(order_id, customer_id)
+                tool_results.append({"tool": "track_order", **result})
+            
+            # Generate response with appropriate UI
+            return await self._generate_intelligent_response(user_query, intent, tool_results, execution_context, trace_id)
+            
+        except Exception as e:
+            logger.error(f"Order operation failed: {e}")
+            return await self._fallback_response(user_query, f"Sorry, I couldn't complete that order operation: {str(e)}")
+    
+    async def _handle_product_operations(self, user_query: str, intent: Dict[str, Any], execution_context: Dict[str, Any], trace_id: str = None) -> Dict[str, Any]:
+        """Handle product-related operations (search, details)"""
+        logger.info(f"Handling product operation: {intent['intent_type']}")
+        
+        try:
+            # Use existing product search logic but with intelligent context
+            entity_refs = intent.get('entity_references', [])
+            search_query = " ".join(entity_refs) if entity_refs else user_query
+            
+            # Apply constraints from intent
+            filters = {}
+            constraints = intent.get('constraints', {})
+            if 'max_price' in constraints:
+                filters['max_price'] = constraints['max_price']
+            if 'min_price' in constraints:
+                filters['min_price'] = constraints['min_price']
+            if 'category' in constraints:
+                filters['category'] = constraints['category']
+            
+            # Debug logging
+            logger.info(f"🔍 Product search - Query: '{search_query}', Filters: {filters}, Entity refs: {entity_refs}, Constraints: {constraints}")
+            
+            result = await self.mcp_tools.search_products(search_query, filters)
+            tool_results = [{"tool": "search_products", **result}]
+            
+            logger.info(f"📊 Search result: {result.get('success')}, Count: {result.get('count', 0)}")
+            
+            return await self._generate_intelligent_response(user_query, intent, tool_results, execution_context, trace_id)
+            
+        except Exception as e:
+            logger.error(f"Product operation failed: {e}")
+            return await self._fallback_response(user_query, f"Sorry, I couldn't search for products: {str(e)}")
+    
+    async def _handle_customer_operations(self, user_query: str, intent: Dict[str, Any], execution_context: Dict[str, Any], trace_id: str = None) -> Dict[str, Any]:
+        """Handle customer-related operations (profile updates)"""
+        logger.info(f"Handling customer operation: {intent['intent_type']}")
+        
+        try:
+            customer = execution_context.get('customer')
+            if not customer:
+                return await self._handle_missing_context(user_query, intent, ['customer_authentication'], trace_id)
+            
+            customer_id = customer.get('id') or customer.get('customer_id')
+            updates = self._extract_customer_updates(intent, user_query)
+            
+            if updates:
+                result = await self.mcp_tools.update_customer(customer_id, updates)
+                tool_results = [{"tool": "update_customer", **result}]
+            else:
+                # Just get current customer info
+                result = await self.mcp_tools.get_customer_info(customer_id)
+                tool_results = [{"tool": "get_customer_info", **result}]
+            
+            return await self._generate_intelligent_response(user_query, intent, tool_results, execution_context, trace_id)
+            
+        except Exception as e:
+            logger.error(f"Customer operation failed: {e}")
+            return await self._fallback_response(user_query, f"Sorry, I couldn't complete that customer operation: {str(e)}")
+    
+    async def _generate_intelligent_response(self, user_query: str, intent: Dict[str, Any], tool_results: List[Dict[str, Any]], execution_context: Dict[str, Any], trace_id: str = None) -> Dict[str, Any]:
+        """Generate intelligent response with appropriate UI components"""
+        
+        # Create execution plan from intent
+        execution_plan = {
+            "strategy": "intelligent",
+            "intent_type": intent['intent_type'],
+            "tool_calls": [{"name": result.get("tool", "unknown")} for result in tool_results],
+            "confidence": intent.get('confidence', 1.0)
+        }
+        
+        # Generate text response
+        response_message = await self._generate_natural_response(user_query, intent, tool_results, execution_context)
+        
+        # Generate UI components
+        ui_response = await self.generate_ui_response(user_query, execution_plan, tool_results, execution_context)
+        
+        return {
+            "message": response_message,
+            "ui_components": ui_response.get("ui_components", []),
+            "layout_strategy": ui_response.get("layout_strategy", "text_only"),
+            "user_intent": ui_response.get("user_intent", intent['intent_type']),
+            "response_type": "intelligent_with_ui",
+            "intent": intent,
+            "execution_context": execution_context,
+            "tool_results": tool_results,
+            "debug": {
+                "intent_type": intent['intent_type'],
+                "confidence": intent.get('confidence', 0),
+                "tools_used": [r.get("tool") for r in tool_results],
+                "ui_generation_enabled": self.ui_generation_enabled
+            }
+        }
+    
+    def _extract_order_updates(self, intent: Dict[str, Any], user_query: str) -> Dict[str, Any]:
+        """Extract order update fields from intent and query"""
+        updates = {}
+        query_lower = user_query.lower()
+        
+        # Address updates
+        if any(word in query_lower for word in ['address', 'shipping', 'delivery']):
+            # In a real implementation, you'd extract the new address
+            # For now, we'll flag it as needing manual input
+            updates['_requires_address_input'] = True
+        
+        # Status updates (usually admin only, but could be cancellation)
+        if 'cancel' in query_lower:
+            updates['status'] = 'cancelled'
+            updates['cancellation_reason'] = 'Customer requested cancellation'
+        
+        return updates
+    
+    def _extract_cancellation_reason(self, user_query: str) -> str:
+        """Extract cancellation reason from user query"""
+        query_lower = user_query.lower()
+        
+        if 'wrong' in query_lower or 'mistake' in query_lower:
+            return "Ordered by mistake"
+        elif 'found better' in query_lower or 'cheaper' in query_lower:
+            return "Found better option"
+        elif 'changed mind' in query_lower:
+            return "Changed mind"
+        else:
+            return "Customer requested cancellation"
+    
+    def _extract_customer_updates(self, intent: Dict[str, Any], user_query: str) -> Dict[str, Any]:
+        """Extract customer update fields from intent and query"""
+        updates = {}
+        query_lower = user_query.lower()
+        
+        # Email updates
+        if 'email' in query_lower:
+            updates['_requires_email_input'] = True
+        
+        # Address updates
+        if 'address' in query_lower:
+            updates['_requires_address_input'] = True
+        
+        # Phone updates
+        if 'phone' in query_lower or 'number' in query_lower:
+            updates['_requires_phone_input'] = True
+        
+        return updates
+    
+    async def _generate_natural_response(self, user_query: str, intent: Dict[str, Any], tool_results: List[Dict[str, Any]], execution_context: Dict[str, Any]) -> str:
+        """Generate natural language response based on intent and results"""
+        
+        intent_type = intent['intent_type']
+        success_results = [r for r in tool_results if r.get('success')]
+        
+        if not success_results:
+            return f"I couldn't complete your request. Please try again or contact support."
+        
+        # Generate intent-specific responses
+        if intent_type == 'order_update':
+            if any('_requires_' in str(r.get('data', {})) for r in success_results):
+                return "I can help you update your order! What would you like to change?"
+            else:
+                return f"Your order has been updated successfully!"
+                
+        elif intent_type == 'order_cancel':
+            return f"Your order has been cancelled successfully. You should receive a confirmation email shortly."
+            
+        elif intent_type == 'order_status':
+            status_result = success_results[0]
+            data = status_result.get('data', {})
+            status = data.get('status', 'unknown')
+            return f"Your order is currently {status}. {status_result.get('message', '')}"
+            
+        elif intent_type == 'product_search':
+            search_result = success_results[0]
+            count = search_result.get('count', 0)
+            if count > 0:
+                return f"I found {count} products matching your search!"
+            else:
+                return "I couldn't find any products matching your search. Try different keywords or browse our categories."
+                
+        else:
+            return "I've processed your request successfully!"
     
     def _should_generate_ui(self, user_query: str, execution_plan: Dict[str, Any]) -> bool:
         """Determine if UI generation would be beneficial for this query"""

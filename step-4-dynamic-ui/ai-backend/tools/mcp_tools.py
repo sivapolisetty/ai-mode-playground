@@ -39,21 +39,53 @@ class MCPTools:
         logger.info(f"Initialized MCP tools with component path: {self.components_path}")
     
     def _extract_product_terms(self, query: str) -> List[str]:
-        """Extract relevant product terms from natural language query"""
+        """Extract relevant product terms from natural language query, excluding price and constraint terms"""
+        import re
+        
         # Common stop words and question words to remove
         stop_words = {
             'what', "what's", 'is', 'the', 'price', 'of', 'how', 'much', 'does', 'cost', 
             'show', 'me', 'find', 'search', 'for', 'get', 'buy', 'purchase',
             'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'from',
             'about', 'do', 'you', 'have', 'any', 'can', 'i', 'want', 'need',
-            'where', 'when', 'which', 'who', 'why', 'are', 'was', 'were', 'be'
+            'where', 'when', 'which', 'who', 'why', 'are', 'was', 'were', 'be',
+            # Add price constraint words to stop words
+            'under', 'below', 'less', 'than', 'up', 'within', 'maximum', 'max',
+            'over', 'above', 'more', 'minimum', 'min', 'between'
         }
         
+        # Remove price expressions (like $2000, $1,500, etc.)
+        query_clean = re.sub(r'\$[\d,]+(?:\.\d{2})?', '', query)
+        
         # Split query into words and remove stop words
-        words = query.lower().replace('?', '').replace(',', '').split()
+        words = query_clean.lower().replace('?', '').replace(',', '').split()
         product_terms = [word for word in words if word not in stop_words and len(word) > 1]
         
         return product_terms
+    
+    def _extract_price_constraints(self, query: str) -> Dict[str, float]:
+        """Extract price constraints from natural language query"""
+        import re
+        constraints = {}
+        
+        # Look for price amounts in the query
+        price_matches = re.findall(r'\$?([\d,]+(?:\.\d{2})?)', query)
+        
+        if price_matches:
+            # Convert to float, removing commas
+            price_value = float(price_matches[0].replace(',', ''))
+            
+            # Determine if it's a max or min constraint based on context
+            query_lower = query.lower()
+            if any(word in query_lower for word in ['under', 'below', 'less than', 'up to', 'maximum', 'max']):
+                constraints['max_price'] = price_value
+            elif any(word in query_lower for word in ['over', 'above', 'more than', 'minimum', 'min']):
+                constraints['min_price'] = price_value
+            elif 'between' in query_lower:
+                # Handle "between X and Y" - this is more complex, for now just use as max
+                constraints['max_price'] = price_value
+                
+        return constraints
 
     async def search_products(self, query: str, filters: Dict[str, Any] = None) -> Dict[str, Any]:
         """Search for products by query with enhanced filtering"""
@@ -64,10 +96,22 @@ class MCPTools:
             
             products = response.json()
             
-            # Enhanced search logic with term extraction
+            # Enhanced search logic with term extraction and price constraints
             matching_products = []
             query_lower = query.lower()
             product_terms = self._extract_product_terms(query)
+            price_constraints = self._extract_price_constraints(query)
+            
+            # Add semantic expansion for common product categories
+            if 'laptop' in query_lower or 'laptops' in query_lower:
+                product_terms.extend(['macbook', 'notebook', 'computer'])
+            if 'phone' in query_lower or 'phones' in query_lower:
+                product_terms.extend(['iphone', 'smartphone'])
+            if 'headphone' in query_lower or 'headphones' in query_lower:
+                product_terms.extend(['earphone', 'headset', 'audio'])
+            
+            logger.info(f"🔍 Search expanded terms: {product_terms}")
+            logger.info(f"💰 Price constraints: {price_constraints}")
             
             for product in products:
                 name = product.get('name', '').lower()
@@ -90,9 +134,28 @@ class MCPTools:
                         if term in product_text:
                             term_matches += 1
                 
-                # Match if exact match OR if majority of terms match
-                if exact_match or (product_terms and term_matches >= len(product_terms) * 0.6):
+                # Improved matching logic: 
+                # - If we have product terms, require at least 1 match (not 60% of total terms including irrelevant ones)
+                # - If no product terms, fall back to exact match
+                product_match = False
+                if product_terms:
+                    # Require at least 1 term match if we have relevant product terms
+                    product_match = term_matches > 0
+                else:
+                    # If no specific product terms, use exact substring matching
+                    product_match = exact_match
+                
+                if product_match:
                     matching_products.append(product)
+            
+            # Apply price constraints extracted from query
+            if price_constraints:
+                if 'max_price' in price_constraints:
+                    matching_products = [p for p in matching_products 
+                                       if p.get('price', 0) <= price_constraints['max_price']]
+                if 'min_price' in price_constraints:
+                    matching_products = [p for p in matching_products 
+                                       if p.get('price', 0) >= price_constraints['min_price']]
             
             # Apply additional filters if provided
             if filters:
@@ -114,7 +177,9 @@ class MCPTools:
                 "data": matching_products,
                 "count": len(matching_products),
                 "query": query,
-                "filters": filters or {}
+                "filters": filters or {},
+                "extracted_constraints": price_constraints,
+                "search_terms": product_terms
             }
         except Exception as e:
             logger.error(f"Product search failed: {e}")
@@ -158,6 +223,24 @@ class MCPTools:
             }
         except Exception as e:
             logger.error(f"Get products failed: {e}")
+            return {"success": False, "error": str(e)}
+    
+    async def get_customer_info(self, customer_id: str) -> Dict[str, Any]:
+        """Get detailed customer information"""
+        try:
+            # Since the API doesn't have individual customer endpoint, get all customers and filter
+            response = await self.client.get(f"{self.api_url}/api/customers")
+            if response.status_code == 200:
+                customers = response.json()
+                customer = next((c for c in customers if c.get("id") == customer_id), None)
+                if customer:
+                    return {"success": True, "data": customer}
+                else:
+                    return {"success": False, "error": "Customer not found"}
+            else:
+                return {"success": False, "error": f"Failed to fetch customers: {response.status_code}"}
+        except Exception as e:
+            logger.error(f"Get customer info failed: {e}")
             return {"success": False, "error": str(e)}
     
     async def get_customers(self, limit: Optional[int] = None, search: Optional[str] = None) -> Dict[str, Any]:
@@ -279,6 +362,191 @@ class MCPTools:
             }
         except Exception as e:
             logger.error(f"Create order failed: {e}")
+            return {"success": False, "error": str(e)}
+    
+    async def get_order(self, order_id: str, customer_id: str = None) -> Dict[str, Any]:
+        """Get detailed order information by searching through customer orders"""
+        try:
+            if customer_id:
+                # Get orders for specific customer
+                response = await self.client.get(f"{self.api_url}/api/customers/{customer_id}/orders")
+                if response.status_code == 200:
+                    orders = response.json()
+                    order = next((o for o in orders if o.get("id") == order_id), None)
+                    if order:
+                        return {"success": True, "data": order}
+                    else:
+                        return {"success": False, "error": f"Order {order_id} not found for customer {customer_id}"}
+            else:
+                # If no customer_id provided, search through all customers (less efficient)
+                customers_response = await self.client.get(f"{self.api_url}/api/customers")
+                if customers_response.status_code == 200:
+                    customers = customers_response.json()
+                    for customer in customers:
+                        orders_response = await self.client.get(f"{self.api_url}/api/customers/{customer['id']}/orders")
+                        if orders_response.status_code == 200:
+                            orders = orders_response.json()
+                            order = next((o for o in orders if o.get("id") == order_id), None)
+                            if order:
+                                return {"success": True, "data": order}
+                    return {"success": False, "error": f"Order {order_id} not found"}
+            
+            return {"success": False, "error": f"Failed to search for order: {response.status_code}"}
+        except Exception as e:
+            logger.error(f"Get order failed: {e}")
+            return {"success": False, "error": str(e)}
+    
+    async def update_order(self, order_id: str, updates: Dict[str, Any], customer_id: str = None) -> Dict[str, Any]:
+        """
+        Update an existing order - Limited to cancellation since API doesn't support general updates
+        
+        Args:
+            order_id: Order ID to update
+            updates: Dict containing fields to update (currently only supports cancellation)
+            customer_id: Customer ID to help locate the order
+        
+        Returns:
+            Updated order information or error
+        """
+        try:
+            # First check if order exists and can be modified
+            order_response = await self.get_order(order_id, customer_id)
+            if not order_response.get("success"):
+                return order_response
+            
+            current_order = order_response["data"]
+            
+            # Check if order can be modified based on status
+            if current_order.get("status") in ["shipped", "delivered", "cancelled"]:
+                return {
+                    "success": False, 
+                    "error": f"Cannot modify order in {current_order['status']} status",
+                    "current_status": current_order["status"]
+                }
+            
+            # Since the API doesn't have general order update, we can only cancel
+            if updates.get("status") == "cancelled" or "cancel" in str(updates).lower():
+                return await self.cancel_order(order_id, updates.get("cancellation_reason", "Customer requested"))
+            else:
+                # For other updates like address changes, we would need to implement via the API
+                # For now, return a message explaining the limitation
+                return {
+                    "success": False,
+                    "error": "Order updates are limited. Currently only cancellation is supported via API. For address changes, please contact customer service.",
+                    "current_order": current_order,
+                    "requested_updates": updates
+                }
+                
+        except Exception as e:
+            logger.error(f"Update order failed: {e}")
+            return {"success": False, "error": str(e)}
+    
+    async def cancel_order(self, order_id: str, reason: str = None) -> Dict[str, Any]:
+        """Cancel an order with optional reason using the correct API endpoint"""
+        try:
+            # Use the correct cancel endpoint
+            cancel_data = {}
+            if reason:
+                cancel_data["reason"] = reason
+            
+            response = await self.client.patch(
+                f"{self.api_url}/api/orders/{order_id}/cancel",
+                json=cancel_data
+            )
+            
+            if response.status_code == 200:
+                return {
+                    "success": True,
+                    "data": response.json(),
+                    "message": f"Order {order_id} cancelled successfully",
+                    "reason": reason
+                }
+            elif response.status_code == 404:
+                return {
+                    "success": False,
+                    "error": f"Order {order_id} not found"
+                }
+            elif response.status_code == 400:
+                return {
+                    "success": False,
+                    "error": f"Cannot cancel order {order_id} - may already be shipped or delivered"
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": f"Failed to cancel order: {response.status_code}"
+                }
+                
+        except Exception as e:
+            logger.error(f"Cancel order failed: {e}")
+            return {"success": False, "error": str(e)}
+    
+    async def track_order(self, order_id: str, customer_id: str = None) -> Dict[str, Any]:
+        """Get order tracking information"""
+        try:
+            order_response = await self.get_order(order_id, customer_id)
+            if not order_response.get("success"):
+                return order_response
+            
+            order = order_response["data"]
+            
+            # Generate tracking info based on order status
+            tracking_info = {
+                "order_id": order_id,
+                "status": order.get("status", "unknown"),
+                "created_at": order.get("created_at"),
+                "updated_at": order.get("updated_at"),
+                "estimated_delivery": order.get("estimated_delivery"),
+                "tracking_number": order.get("tracking_number"),
+                "carrier": order.get("carrier", "Standard Shipping")
+            }
+            
+            # Add status-specific information
+            if order["status"] == "shipped":
+                tracking_info["shipped_date"] = order.get("shipped_date")
+                tracking_info["tracking_url"] = f"https://track.example.com/{order.get('tracking_number', 'N/A')}"
+            elif order["status"] == "delivered":
+                tracking_info["delivered_date"] = order.get("delivered_date")
+            
+            return {
+                "success": True,
+                "data": tracking_info,
+                "message": f"Order {order_id} is currently {order['status']}"
+            }
+            
+        except Exception as e:
+            logger.error(f"Track order failed: {e}")
+            return {"success": False, "error": str(e)}
+    
+    async def update_customer(self, customer_id: str, updates: Dict[str, Any]) -> Dict[str, Any]:
+        """Update customer information"""
+        try:
+            # First check if customer exists
+            customer_response = await self.get_customer_info(customer_id)
+            if not customer_response.get("success"):
+                return customer_response
+            
+            # Send update request
+            response = await self.client.patch(
+                f"{self.api_url}/api/customers/{customer_id}",
+                json=updates
+            )
+            
+            if response.status_code == 200:
+                return {
+                    "success": True,
+                    "data": response.json(),
+                    "message": f"Customer {customer_id} updated successfully",
+                    "updated_fields": list(updates.keys())
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": f"Failed to update customer: {response.status_code}"
+                }
+                
+        except Exception as e:
+            logger.error(f"Update customer failed: {e}")
             return {"success": False, "error": str(e)}
     
     async def get_categories(self) -> Dict[str, Any]:

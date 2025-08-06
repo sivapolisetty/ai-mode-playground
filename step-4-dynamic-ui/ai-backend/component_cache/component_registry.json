@@ -1,0 +1,33 @@
+{
+  "total_components": 61,
+  "component_types": {
+    "organism": 11,
+    "molecule": 41,
+    "atom": 7,
+    "template": 2
+  },
+  "business_domains": {
+    "product_catalog": 3,
+    "customer_service": 68,
+    "payment": 3,
+    "core_ui": 7,
+    "order_management": 4,
+    "feedback": 7,
+    "navigation": 13,
+    "data_display": 4,
+    "forms": 4,
+    "admin": 4
+  },
+  "technical_features": {
+    "stateful_components": 12,
+    "components_with_effects": 6,
+    "context_consumers": 5
+  },
+  "last_scan": "2025-08-06T12:20:09.021410",
+  "scan_metadata": {
+    "total_files": 61,
+    "successful_scans": 61,
+    "failed_scans": 0,
+    "skipped_scans": 0
+  }
+}
