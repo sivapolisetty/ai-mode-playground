@@ -1,0 +1,39 @@
+# AI Backend Process Files
+*.pid
+.ai_backend.pid
+
+# Test Results
+quick_test_results_*.json
+orchestration_test_results_*.json
+
+# Logs
+ai-backend.log
+*.log
+
+# Python Cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# Virtual Environment
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+
+# OS Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Claude Code temp files
+../.claude/
