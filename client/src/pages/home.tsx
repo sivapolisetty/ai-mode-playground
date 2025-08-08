@@ -15,6 +15,8 @@ import FAQPage from './faq';
 import BusinessRulesComponent from '@/components/business-rules';
 import { OrderActions } from '@/components/order-actions';
 import { ProductConfiguration } from '@/components/product-configuration';
+// Import shared business components
+import { ProductCard, ProductList, OrderCard, AddressList, AddressForm } from '@/components/business';
 
 const Home: React.FC = () => {
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('CUST-001');
@@ -523,23 +525,30 @@ const Home: React.FC = () => {
               <h2 className="text-2xl font-bold text-gray-900 mb-6">Featured Products</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 {Array.isArray(products) && products.slice(0, 8).map((product: any) => (
-                  <Card key={product.id} className="overflow-hidden hover:shadow-lg transition-shadow">
-                    <div className="aspect-w-1 aspect-h-1">
-                      <img 
-                        src={product.imageUrl || '/placeholder-product.jpg'} 
-                        alt={product.name}
-                        className="w-full h-48 object-cover"
-                      />
-                    </div>
-                    <CardContent className="p-4">
-                      <h3 className="font-semibold text-gray-900 mb-1">{product.name}</h3>
-                      <p className="text-gray-500 text-sm mb-2">{product.brand}</p>
-                      <div className="flex justify-between items-center">
-                        <span className="text-xl font-bold text-blue-600">${product.price}</span>
-                        <Button size="sm" onClick={() => addToCart(product)}>Add to Cart</Button>
-                      </div>
-                    </CardContent>
-                  </Card>
+                  <ProductCard
+                    key={product.id}
+                    title={product.name}
+                    description={product.description}
+                    price={`$${product.price}`}
+                    imageUrl={product.imageUrl || '/placeholder-product.jpg'}
+                    metadata={{ 
+                      brand: product.brand,
+                      stock: product.stockQuantity > 0 ? 'In Stock' : 'Out of Stock'
+                    }}
+                    actions={[
+                      {
+                        label: 'Add to Cart',
+                        action: 'add_to_cart',
+                        data: { productId: product.id },
+                        variant: product.stockQuantity === 0 ? 'outline' : 'default'
+                      }
+                    ]}
+                    onAction={(action, data) => {
+                      if (action === 'add_to_cart') {
+                        addToCart(product)
+                      }
+                    }}
+                  />
                 ))}
               </div>
             </section>
@@ -580,38 +589,36 @@ const Home: React.FC = () => {
             </div>
 
             {/* Products Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {filteredProducts.map((product: any) => (
-                <Card key={product.id} className="overflow-hidden hover:shadow-lg transition-shadow">
-                  <div className="aspect-w-1 aspect-h-1">
-                    <img 
-                      src={product.imageUrl || '/placeholder-product.jpg'} 
-                      alt={product.name}
-                      className="w-full h-48 object-cover"
-                    />
-                  </div>
-                  <CardContent className="p-4">
-                    <h3 className="font-semibold text-gray-900 mb-1">{product.name}</h3>
-                    <p className="text-gray-500 text-sm mb-2">{product.brand}</p>
-                    <p className="text-gray-600 text-xs mb-3 line-clamp-2">{product.description}</p>
-                    <div className="flex justify-between items-center mb-3">
-                      <span className="text-xl font-bold text-blue-600">${product.price}</span>
-                      <Badge variant={product.stockQuantity > 0 ? "default" : "destructive"}>
-                        {product.stockQuantity > 0 ? "In Stock" : "Out of Stock"}
-                      </Badge>
-                    </div>
-                    <Button 
-                      className="w-full" 
-                      disabled={product.stockQuantity === 0}
-                      onClick={() => addToCart(product)}
-                    >
-                      <i className="ri-shopping-cart-line mr-2"></i>
-                      Add to Cart
-                    </Button>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+            <ProductList
+              products={filteredProducts.map((product: any) => ({
+                id: product.id,
+                title: product.name,
+                description: product.description,
+                price: `$${product.price}`,
+                imageUrl: product.imageUrl || '/placeholder-product.jpg',
+                metadata: { 
+                  brand: product.brand,
+                  stock: product.stockQuantity > 0 ? 'In Stock' : 'Out of Stock'
+                },
+                actions: [
+                  {
+                    label: 'Add to Cart',
+                    action: 'add_to_cart',
+                    data: { productId: product.id },
+                    variant: product.stockQuantity === 0 ? 'outline' : 'default'
+                  }
+                ]
+              }))}
+              onAction={(action, data) => {
+                if (action === 'add_to_cart') {
+                  const product = Array.isArray(products) ? products.find((p: any) => p.id === data?.productId) : null
+                  if (product) {
+                    addToCart(product)
+                  }
+                }
+              }}
+              layout="grid"
+            />
           </div>
         )}
 
@@ -623,105 +630,87 @@ const Home: React.FC = () => {
               <p className="text-gray-600">Track your order history and status</p>
             </div>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Order History</CardTitle>
-                <CardDescription>Your recent orders and their status</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {Array.isArray(customerOrders) && customerOrders.length > 0 ? (
-                    customerOrders.map((order: any) => (
-                      <div key={order.id} className="border rounded-lg p-4">
-                        <div className="flex justify-between items-start mb-4">
-                          <div>
-                            <h3 className="font-semibold">Order #{order.id}</h3>
-                            <p className="text-sm text-gray-500">{new Date(order.orderDate).toLocaleDateString()}</p>
-                          </div>
-                          <OrderActions 
-                            order={{
-                              id: order.id,
-                              customerId: order.customerId,
-                              date: order.orderDate,
-                              items: `${order.orderItems?.length || 0} items`,
-                              amount: order.totalAmount,
-                              status: order.status,
-                              canReturn: order.canReturn,
-                              canCancel: order.canCancel,
-                              paymentMethod: order.paymentMethod,
-                              giftCardCode: order.giftCardCode
-                            }}
-                            customerId={selectedCustomerId}
-                          />
-                        </div>
-                        
-                        {/* Product Items Display */}
-                        {order.orderItems && order.orderItems.length > 0 && (
-                          <div className="mb-4">
-                            <h4 className="text-sm font-medium text-gray-700 mb-3">Items Ordered:</h4>
-                            <div className="space-y-3">
-                              {order.orderItems.map((item: any) => (
-                                <div key={item.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                                  {/* Product Image */}
-                                  {item.product?.imageUrl ? (
-                                    <img 
-                                      src={item.product.imageUrl} 
-                                      alt={item.product.name}
-                                      className="w-16 h-16 object-cover rounded-md border"
-                                    />
-                                  ) : (
-                                    <div className="w-16 h-16 bg-gray-200 rounded-md flex items-center justify-center border">
-                                      <span className="text-gray-400 text-xs">No Image</span>
-                                    </div>
-                                  )}
-                                  
-                                  {/* Product Details */}
-                                  <div className="flex-1">
-                                    <h5 className="font-medium text-gray-900">
-                                      {item.product?.name || 'Unknown Product'}
-                                      {item.product?.model && <span className="text-gray-500 font-normal"> ({item.product.model})</span>}
-                                    </h5>
-                                    {item.product?.description && (
-                                      <p className="text-sm text-gray-600 mt-1">
-                                        {item.product.description}
-                                      </p>
-                                    )}
-                                    <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
-                                      {item.product?.brand && <span>Brand: {item.product.brand}</span>}
-                                      {item.selectedColor && <span>Color: {item.selectedColor}</span>}
-                                      {item.selectedSize && <span>Size: {item.selectedSize}</span>}
-                                      <span>Qty: {item.quantity}</span>
-                                      <span className="font-medium">${item.price.toFixed(2)} each</span>
-                                    </div>
-                                  </div>
-                                  
-                                  {/* Item Total */}
-                                  <div className="text-right">
-                                    <div className="font-medium text-gray-900">
-                                      ${(item.price * item.quantity).toFixed(2)}
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                        
-                        <div className="flex justify-between items-center pt-3 border-t">
-                          <p className="text-sm text-gray-500">Shipping to: {order.shippingAddress}</p>
-                          <p className="text-lg font-semibold text-gray-900">Total: ${order.totalAmount.toFixed(2)}</p>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-center py-8">
-                      <i className="ri-shopping-bag-line text-4xl text-gray-300 mb-4"></i>
-                      <p className="text-gray-500">No orders found</p>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+            {/* Orders List using shared OrderCard component */}
+            <div className="space-y-4">
+              {Array.isArray(customerOrders) && customerOrders.length > 0 ? (
+                customerOrders.map((order: any) => (
+                  <OrderCard
+                    key={order.id}
+                    id={order.id}
+                    status={order.status}
+                    total={order.totalAmount}
+                    createdAt={order.orderDate}
+                    trackingNumber={order.trackingNumber}
+                    items={order.orderItems?.map((item: any) => ({
+                      id: item.id,
+                      product_name: item.product?.name || 'Unknown Product',
+                      quantity: item.quantity,
+                      price: item.price,
+                      total: item.price * item.quantity,
+                      imageUrl: item.product?.imageUrl || '/placeholder-product.jpg',
+                      brand: item.product?.brand
+                    })) || []}
+                    actions={[
+                      {
+                        label: 'View Details',
+                        action: 'view_order',
+                        data: { orderId: order.id },
+                        variant: 'outline'
+                      },
+                      ...(order.canCancel ? [{
+                        label: 'Cancel Order',
+                        action: 'cancel_order',
+                        data: { orderId: order.id },
+                        variant: 'destructive' as const
+                      }] : []),
+                      ...(order.canReturn ? [{
+                        label: 'Return Items',
+                        action: 'return_order',
+                        data: { orderId: order.id },
+                        variant: 'outline' as const
+                      }] : []),
+                      {
+                        label: 'Track Order',
+                        action: 'track_order',
+                        data: { orderId: order.id, trackingNumber: order.trackingNumber },
+                        variant: 'default' as const
+                      }
+                    ]}
+                    onAction={(action, data) => {
+                      console.log(`Order action: ${action}`, data)
+                      // Handle order actions here
+                      switch (action) {
+                        case 'view_order':
+                          // Navigate to order details
+                          break
+                        case 'cancel_order':
+                          // Handle order cancellation
+                          break
+                        case 'return_order':
+                          // Handle return process
+                          break
+                        case 'track_order':
+                          // Open tracking information
+                          break
+                        default:
+                          console.log('Unhandled order action:', action)
+                      }
+                    }}
+                  />
+                ))
+              ) : (
+                <Card className="text-center py-12">
+                  <CardContent>
+                    <i className="ri-shopping-bag-line text-4xl text-gray-300 mb-4"></i>
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No orders found</h3>
+                    <p className="text-gray-500 mb-4">You haven't placed any orders yet.</p>
+                    <Button onClick={() => setActiveView('products')}>
+                      Start Shopping
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
           </div>
         )}
 
@@ -847,89 +836,44 @@ const Home: React.FC = () => {
               </Card>
             </div>
 
-            {/* Addresses Section */}
-            <Card>
-              <CardHeader>
-                <div className="flex justify-between items-center">
-                  <CardTitle>Addresses</CardTitle>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleAddAddress}
-                  >
-                    <i className="ri-add-line mr-2"></i>
-                    Add Address
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {Array.isArray(customerAddresses) && customerAddresses.length > 0 ? (
-                  <div className="space-y-4">
-                    {customerAddresses.map((address: any) => (
-                      <div key={address.id} className="border rounded-lg p-4 bg-slate-50">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2">
-                              <span className="font-medium text-gray-900">{address.label}</span>
-                              {address.isDefault && (
-                                <Badge variant="default" className="text-xs">
-                                  Default
-                                </Badge>
-                              )}
-                            </div>
-                            <div className="text-sm text-gray-700 mb-1">{address.recipientName}</div>
-                            <div className="text-sm text-gray-600">{formatAddress(address)}</div>
-                            {address.phone && (
-                              <div className="text-sm text-gray-600 mt-1">Phone: {address.phone}</div>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2 ml-4">
-                            {!address.isDefault && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleSetDefaultAddress(address.id)}
-                                className="text-xs"
-                              >
-                                Set Default
-                              </Button>
-                            )}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleEditAddress(address)}
-                              className="text-xs"
-                            >
-                              <i className="ri-edit-line"></i>
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDeleteAddress(address.id)}
-                              className="text-xs text-red-600 hover:text-red-700"
-                            >
-                              <i className="ri-delete-bin-line"></i>
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-gray-500">
-                    <i className="ri-map-pin-line text-4xl mb-4"></i>
-                    <p>No addresses found</p>
-                    <Button
-                      variant="outline"
-                      onClick={handleAddAddress}
-                      className="mt-4"
-                    >
-                      Add Your First Address
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            {/* Addresses Section using shared AddressList component */}
+            <AddressList
+              addresses={(Array.isArray(customerAddresses) ? customerAddresses : []).map((address: any) => ({
+                id: address.id,
+                label: address.label,
+                recipientName: address.recipientName,
+                street: `${address.addressLine1}${address.addressLine2 ? `, ${address.addressLine2}` : ''}`,
+                city: address.city,
+                state: address.state,
+                zipCode: address.zipCode,
+                country: address.country || 'United States',
+                phone: address.phone,
+                isDefault: address.isDefault,
+                type: address.type || 'both'
+              }))}
+              onAction={(action, data) => {
+                switch (action) {
+                  case 'add_address':
+                    handleAddAddress();
+                    break;
+                  case 'edit_address':
+                    const address = customerAddresses?.find((addr: any) => addr.id === data?.addressId);
+                    if (address) handleEditAddress(address);
+                    break;
+                  case 'delete_address':
+                    if (data?.addressId) handleDeleteAddress(data.addressId);
+                    break;
+                  case 'set_default_address':
+                    if (data?.addressId) handleSetDefaultAddress(data.addressId);
+                    break;
+                  default:
+                    console.log('Unhandled address action:', action, data);
+                }
+              }}
+              title="My Addresses"
+              description="Manage your shipping and billing addresses"
+              showAddButton={true}
+            />
           </div>
         )}
 
@@ -956,178 +900,76 @@ const Home: React.FC = () => {
         )}
       </main>
 
-      {/* Address Form Modal */}
+      {/* Address Form Modal using shared AddressForm component */}
       {showAddressForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-lg max-w-2xl w-full mx-4 max-h-screen overflow-y-auto">
-            <div className="px-6 py-4 border-b">
-              <h3 className="text-lg font-semibold text-gray-900">
-                {editingAddressId ? 'Edit Address' : 'Add New Address'}
-              </h3>
-            </div>
-            
-            <div className="px-6 py-4">
-              <form className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div className="sm:col-span-1">
-                  <label htmlFor="label" className="block text-sm font-medium text-gray-700">
-                    Address Label
-                  </label>
-                  <Input
-                    type="text"
-                    name="label"
-                    id="label"
-                    placeholder="e.g., Home, Work, Billing"
-                    value={addressFormData.label}
-                    onChange={handleAddressInputChange}
-                    className="mt-1"
-                  />
-                </div>
-                
-                <div className="sm:col-span-1">
-                  <label htmlFor="recipientName" className="block text-sm font-medium text-gray-700">
-                    Recipient Name
-                  </label>
-                  <Input
-                    type="text"
-                    name="recipientName"
-                    id="recipientName"
-                    value={addressFormData.recipientName}
-                    onChange={handleAddressInputChange}
-                    className="mt-1"
-                  />
-                </div>
-                
-                <div className="sm:col-span-2">
-                  <label htmlFor="addressLine1" className="block text-sm font-medium text-gray-700">
-                    Address Line 1
-                  </label>
-                  <Input
-                    type="text"
-                    name="addressLine1"
-                    id="addressLine1"
-                    placeholder="Street address"
-                    value={addressFormData.addressLine1}
-                    onChange={handleAddressInputChange}
-                    className="mt-1"
-                  />
-                </div>
-                
-                <div className="sm:col-span-2">
-                  <label htmlFor="addressLine2" className="block text-sm font-medium text-gray-700">
-                    Address Line 2 (Optional)
-                  </label>
-                  <Input
-                    type="text"
-                    name="addressLine2"
-                    id="addressLine2"
-                    placeholder="Apt, suite, unit, building, floor, etc."
-                    value={addressFormData.addressLine2}
-                    onChange={handleAddressInputChange}
-                    className="mt-1"
-                  />
-                </div>
-                
-                <div className="sm:col-span-1">
-                  <label htmlFor="city" className="block text-sm font-medium text-gray-700">
-                    City
-                  </label>
-                  <Input
-                    type="text"
-                    name="city"
-                    id="city"
-                    value={addressFormData.city}
-                    onChange={handleAddressInputChange}
-                    className="mt-1"
-                  />
-                </div>
-                
-                <div className="sm:col-span-1">
-                  <label htmlFor="state" className="block text-sm font-medium text-gray-700">
-                    State
-                  </label>
-                  <Input
-                    type="text"
-                    name="state"
-                    id="state"
-                    value={addressFormData.state}
-                    onChange={handleAddressInputChange}
-                    className="mt-1"
-                  />
-                </div>
-                
-                <div className="sm:col-span-1">
-                  <label htmlFor="zipCode" className="block text-sm font-medium text-gray-700">
-                    ZIP Code
-                  </label>
-                  <Input
-                    type="text"
-                    name="zipCode"
-                    id="zipCode"
-                    value={addressFormData.zipCode}
-                    onChange={handleAddressInputChange}
-                    className="mt-1"
-                  />
-                </div>
-                
-                <div className="sm:col-span-1">
-                  <label htmlFor="country" className="block text-sm font-medium text-gray-700">
-                    Country
-                  </label>
-                  <Input
-                    type="text"
-                    name="country"
-                    id="country"
-                    value={addressFormData.country}
-                    onChange={handleAddressInputChange}
-                    className="mt-1"
-                  />
-                </div>
-                
-                <div className="sm:col-span-1">
-                  <label htmlFor="phone" className="block text-sm font-medium text-gray-700">
-                    Phone (Optional)
-                  </label>
-                  <Input
-                    type="tel"
-                    name="phone"
-                    id="phone"
-                    value={addressFormData.phone}
-                    onChange={handleAddressInputChange}
-                    className="mt-1"
-                  />
-                </div>
-                
-                <div className="sm:col-span-1 flex items-center mt-6">
-                  <input
-                    type="checkbox"
-                    name="isDefault"
-                    id="isDefault"
-                    checked={addressFormData.isDefault}
-                    onChange={handleAddressInputChange}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                  <label htmlFor="isDefault" className="ml-2 block text-sm text-gray-700">
-                    Set as default address
-                  </label>
-                </div>
-              </form>
-            </div>
-            
-            <div className="px-6 py-4 border-t flex justify-end space-x-3">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={resetAddressForm}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                onClick={handleSaveAddress}
-              >
-                {editingAddressId ? 'Update Address' : 'Add Address'}
-              </Button>
-            </div>
+            <AddressForm
+              mode={editingAddressId ? 'edit' : 'create'}
+              initialData={editingAddressId ? {
+                label: addressFormData.label,
+                recipientName: addressFormData.recipientName,
+                street: addressFormData.addressLine1,
+                street2: addressFormData.addressLine2,
+                city: addressFormData.city,
+                state: addressFormData.state,
+                zipCode: addressFormData.zipCode,
+                country: addressFormData.country,
+                phone: addressFormData.phone,
+                isDefault: addressFormData.isDefault,
+                type: 'both'
+              } : {
+                recipientName: customer?.name || '',
+                phone: customer?.phone || '',
+                country: 'United States',
+                type: 'both'
+              }}
+              onSubmit={async (data) => {
+                // Transform shared component data back to API format
+                const addressData = {
+                  label: data.label || 'Address',
+                  recipientName: data.recipientName,
+                  addressLine1: data.street,
+                  addressLine2: data.street2 || '',
+                  city: data.city,
+                  state: data.state,
+                  zipCode: data.zipCode,
+                  country: data.country,
+                  phone: data.phone || '',
+                  isDefault: data.isDefault,
+                  customerId: selectedCustomerId,
+                  isActive: true,
+                  createdDate: new Date().toISOString()
+                };
+
+                try {
+                  if (editingAddressId) {
+                    await apiRequest('PUT', `/api/admin/customerAddresses/${editingAddressId}`, addressData);
+                    toast({
+                      title: "Success",
+                      description: "Address updated successfully",
+                    });
+                  } else {
+                    await apiRequest('POST', `/api/customers/${selectedCustomerId}/addresses`, addressData);
+                    toast({
+                      title: "Success", 
+                      description: "Address added successfully",
+                    });
+                  }
+
+                  queryClient.invalidateQueries({ queryKey: [`/api/customers/${selectedCustomerId}/addresses`] });
+                  resetAddressForm();
+                } catch (error) {
+                  toast({
+                    title: "Error",
+                    description: `Failed to ${editingAddressId ? 'update' : 'add'} address`,
+                    variant: "destructive"
+                  });
+                }
+              }}
+              onCancel={resetAddressForm}
+              title={editingAddressId ? 'Edit Address' : 'Add New Address'}
+            />
           </div>
         </div>
       )}

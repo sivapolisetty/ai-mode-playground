@@ -7,9 +7,10 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { GiftCardPayment } from '@/components/gift-card-payment';
 import { AddressSelector } from '@/components/address-selector';
+import { CartItem } from '@/components/business';
 import { useState } from 'react';
 
-interface CartItem {
+interface CartItemData {
   id: string;
   cartItemId?: number; // Add cart item ID for backend operations
   name: string;
@@ -20,8 +21,8 @@ interface CartItem {
 }
 
 interface CartPageProps {
-  cartItems: CartItem[];
-  setCartItems: (items: CartItem[]) => void;
+  cartItems: CartItemData[];
+  setCartItems: (items: CartItemData[]) => void;
   onBackToHome: () => void;
   onSwitchToOrders: () => void;
   selectedCustomerId: string;
@@ -254,54 +255,31 @@ export default function CartPage({ cartItems, setCartItems, onBackToHome, onSwit
             </CardHeader>
             <CardContent className="space-y-4">
               {cartItems.map((item) => (
-                <div key={item.id} className="flex items-center space-x-4 p-4 border rounded-lg">
-                  <div className="w-16 h-16 bg-gray-100 rounded-lg overflow-hidden">
-                    <img 
-                      src={item.imageUrl} 
-                      alt={item.name}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik0yMCAyMEg0NFY0NEgyMFYyMFoiIHN0cm9rZT0iIzlDQTNBRiIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4KPHBhdGggZD0iTTI4IDI4TDM2IDM2IiBzdHJva2U9IiM5Q0EzQUYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+Cjwvc3ZnPgo=';
-                      }}
-                    />
-                  </div>
-                  
-                  <div className="flex-1">
-                    <h3 className="font-semibold">{item.name}</h3>
-                    <p className="text-sm text-gray-500">{item.brand}</p>
-                    <p className="text-lg font-bold text-blue-600">${item.price}</p>
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                    >
-                      <i className="ri-subtract-line"></i>
-                    </Button>
-                    <span className="w-8 text-center font-semibold">{item.quantity}</span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                    >
-                      <i className="ri-add-line"></i>
-                    </Button>
-                  </div>
-
-                  <div className="text-right">
-                    <p className="font-bold">${(item.price * item.quantity).toFixed(2)}</p>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeItem(item.id)}
-                      className="text-red-500 hover:text-red-700"
-                    >
-                      <i className="ri-delete-bin-line"></i>
-                    </Button>
-                  </div>
-                </div>
+                <CartItem
+                  key={item.id}
+                  id={item.id}
+                  cartItemId={item.cartItemId}
+                  name={item.name}
+                  price={item.price}
+                  quantity={item.quantity}
+                  imageUrl={item.imageUrl}
+                  brand={item.brand}
+                  onAction={(action, data) => {
+                    switch (action) {
+                      case 'decrease_quantity':
+                        updateQuantity(data?.productId || item.id, item.quantity - 1);
+                        break;
+                      case 'increase_quantity':
+                        updateQuantity(data?.productId || item.id, item.quantity + 1);
+                        break;
+                      case 'remove_item':
+                        removeItem(data?.productId || item.id);
+                        break;
+                      default:
+                        console.log('Unhandled cart action:', action, data);
+                    }
+                  }}
+                />
               ))}
             </CardContent>
           </Card>

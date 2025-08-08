@@ -22,6 +22,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./tabs"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "./accordion"
 
+// Import business components - these are shared between traditional and dynamic UI
+import { ProductCard, ProductList, OrderCard, AddressCard, AddressForm, AddressList, CartItem } from "../business"
+
 // Component specification types
 export interface UIComponentSpec {
   type: string
@@ -63,6 +66,15 @@ export type UIActionHandler = (action: string, payload?: Record<string, any>) =>
 
 // Component mapping registry
 const COMPONENT_REGISTRY: Record<string, React.ComponentType<any>> = {
+  // Business components (shared between traditional and dynamic UI)
+  productcard: ProductCard,
+  productlist: ProductList,
+  ordercard: OrderCard,
+  addresscard: AddressCard,
+  addressform: AddressForm,
+  addresslist: AddressList,
+  cartitem: CartItem,
+  
   // Layout components
   card: Card,
   cardheader: CardHeader,
@@ -347,16 +359,103 @@ const DynamicComponent: React.FC<DynamicComponentProps> = ({
     finalChildren = processedProps.text
   }
   
-  // For cards with title prop, wrap children in CardHeader + CardContent
+  // Smart component detection - use business components when appropriate
+  if (componentType === 'card' && processedProps.title && processedProps.price) {
+    // This looks like a product card - use the shared ProductCard component
+    return (
+      <ProductCard
+        {...processedProps}
+        actions={spec.actions}
+        onAction={onAction}
+        className={cn(processedProps.className, layoutClasses)}
+        key={`dynamic-product-card-${index}`}
+      />
+    )
+  }
+
+  // Detect OrderCard based on order-specific props or explicit type
+  if ((componentType === 'card' || componentType === 'ordercard' || componentType === 'order_card') && 
+      (processedProps.id && processedProps.status && processedProps.total || 
+       processedProps.order_id || componentType === 'order_card')) {
+    // This looks like an order card - use the shared OrderCard component
+    const orderProps = {
+      id: processedProps.id || processedProps.order_id,
+      status: processedProps.status,
+      total: processedProps.total,
+      createdAt: processedProps.createdAt || processedProps.date,
+      trackingNumber: processedProps.trackingNumber,
+      items: processedProps.items || [],
+      ...processedProps
+    }
+    
+    return (
+      <OrderCard
+        {...orderProps}
+        actions={spec.actions}
+        onAction={onAction}
+        className={cn(processedProps.className, layoutClasses)}
+        key={`dynamic-order-card-${index}`}
+      />
+    )
+  }
+
+  // Detect AddressCard based on address-specific props or explicit type
+  if ((componentType === 'card' || componentType === 'addresscard' || componentType === 'address_card') && 
+      (processedProps.street && processedProps.city || componentType === 'addresscard' || componentType === 'address_card')) {
+    // This looks like an address card - use the shared AddressCard component
+    return (
+      <AddressCard
+        {...processedProps}
+        actions={spec.actions}
+        onAction={onAction}
+        className={cn(processedProps.className, layoutClasses)}
+        key={`dynamic-address-card-${index}`}
+      />
+    )
+  }
+
+  // Detect AddressForm based on form-specific props or explicit type
+  if (componentType === 'addressform' || componentType === 'address_form') {
+    // This is an address form - use the shared AddressForm component
+    return (
+      <AddressForm
+        {...processedProps}
+        onSubmit={(data) => onAction('submit_address', data)}
+        onCancel={() => onAction('cancel_address', {})}
+        className={cn(processedProps.className, layoutClasses)}
+        key={`dynamic-address-form-${index}`}
+      />
+    )
+  }
+
+  // Detect CartItem based on cart-specific props or explicit type
+  if (componentType === 'cartitem' || componentType === 'cart_item' || 
+      (processedProps.name && processedProps.price && processedProps.quantity && processedProps.brand)) {
+    // This looks like a cart item - use the shared CartItem component
+    return (
+      <CartItem
+        {...processedProps}
+        onAction={onAction}
+        className={cn(processedProps.className, layoutClasses)}
+        key={`dynamic-cart-item-${index}`}
+      />
+    )
+  }
+  
+  // For regular cards with title prop, wrap children in CardHeader + CardContent
   if (componentType === 'card' && processedProps.title) {
     const CardHeader = COMPONENT_REGISTRY['cardheader']
     const CardTitle = COMPONENT_REGISTRY['cardtitle'] 
+    const CardDescription = COMPONENT_REGISTRY['carddescription']
     const CardContent = COMPONENT_REGISTRY['cardcontent']
     
     finalChildren = (
       <>
         <CardHeader>
           <CardTitle>{processedProps.title}</CardTitle>
+          {processedProps.description && (
+            <CardDescription>{processedProps.description}</CardDescription>
+          )}
         </CardHeader>
         <CardContent>
           {processedChildren}
@@ -366,6 +465,7 @@ const DynamicComponent: React.FC<DynamicComponentProps> = ({
     
     // Remove title from props since we handled it
     delete finalProps.title
+    delete finalProps.description
   }
   
   

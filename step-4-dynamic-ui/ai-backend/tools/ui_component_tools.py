@@ -365,3 +365,196 @@ class UIComponentTools:
         """Get summary of available components"""
         self._ensure_registry_loaded()
         return self.scanner.get_registry_summary()
+        
+    def get_components_for_order_display(self, order_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Generate OrderCard component for displaying order information"""
+        self._ensure_registry_loaded()
+        
+        # Generate OrderCard using the shared business component
+        order_component = {
+            "type": "card",  # Will be detected as OrderCard by smart component detection
+            "props": {
+                "id": order_data.get("id", "Unknown"),
+                "status": order_data.get("status", "pending"),
+                "total": order_data.get("total", order_data.get("totalAmount", 0)),
+                "createdAt": order_data.get("orderDate", order_data.get("createdAt", "")),
+                "trackingNumber": order_data.get("trackingNumber"),
+                "items": [
+                    {
+                        "id": item.get("id", ""),
+                        "product_name": item.get("product", {}).get("name", item.get("product_name", "Unknown Product")),
+                        "quantity": item.get("quantity", 1),
+                        "price": item.get("price", 0),
+                        "total": item.get("price", 0) * item.get("quantity", 1),
+                        "imageUrl": item.get("product", {}).get("imageUrl", item.get("imageUrl", "/placeholder-product.jpg")),
+                        "brand": item.get("product", {}).get("brand", item.get("brand"))
+                    } for item in order_data.get("orderItems", [])
+                ]
+            },
+            "actions": []
+        }
+        
+        # Add contextual actions based on order status
+        status = order_data.get("status", "pending")
+        
+        # Always add view details
+        order_component["actions"].append({
+            "type": "button",
+            "label": "View Details", 
+            "action": "view_order",
+            "data": {"order_id": order_data.get("id")}
+        })
+        
+        # Add tracking if available
+        if order_data.get("trackingNumber"):
+            order_component["actions"].append({
+                "type": "button",
+                "label": "Track Package",
+                "action": "track_order", 
+                "data": {
+                    "order_id": order_data.get("id"),
+                    "tracking_number": order_data.get("trackingNumber")
+                }
+            })
+        
+        # Add cancel option for pending orders
+        if status in ["pending", "processing"] and order_data.get("canCancel", True):
+            order_component["actions"].append({
+                "type": "button",
+                "label": "Cancel Order",
+                "action": "cancel_order",
+                "data": {"order_id": order_data.get("id")}
+            })
+        
+        # Add return option for delivered orders
+        if status == "delivered" and order_data.get("canReturn", True):
+            order_component["actions"].append({
+                "type": "button", 
+                "label": "Return Items",
+                "action": "return_order",
+                "data": {"order_id": order_data.get("id")}
+            })
+        
+        return [order_component]
+        
+    def get_components_for_address_management(self, address_data: Dict[str, Any] = None, context: str = "view") -> List[Dict[str, Any]]:
+        """Generate address management components (cards, forms, lists)"""
+        self._ensure_registry_loaded()
+        
+        if context == "form" or context == "edit":
+            # Return AddressForm for editing/creating addresses
+            return [{
+                "type": "address_form",
+                "props": {
+                    "mode": "edit" if address_data else "create",
+                    "initialData": address_data or {},
+                    "title": "Edit Address" if address_data else "Add New Address"
+                },
+                "actions": []
+            }]
+        
+        elif context == "list":
+            # Return AddressList for managing multiple addresses
+            addresses = address_data.get("addresses", []) if address_data else []
+            return [{
+                "type": "address_list", 
+                "props": {
+                    "addresses": addresses,
+                    "title": "My Addresses",
+                    "description": "Manage your shipping and billing addresses",
+                    "showAddButton": True
+                },
+                "actions": []
+            }]
+        
+        else:
+            # Return AddressCard for displaying single address
+            if not address_data:
+                return []
+                
+            address_component = {
+                "type": "address_card",
+                "props": {
+                    "id": address_data.get("id"),
+                    "label": address_data.get("label", "Address"),
+                    "recipientName": address_data.get("recipientName"),
+                    "street": address_data.get("street", f"{address_data.get('addressLine1', '')}{', ' + address_data.get('addressLine2', '') if address_data.get('addressLine2') else ''}"),
+                    "city": address_data.get("city", ""),
+                    "state": address_data.get("state", ""),
+                    "zipCode": address_data.get("zipCode", address_data.get("postalCode", "")),
+                    "country": address_data.get("country", "United States"),
+                    "phone": address_data.get("phone"),
+                    "isDefault": address_data.get("isDefault", False),
+                    "type": address_data.get("type", "both")
+                },
+                "actions": []
+            }
+            
+            # Add contextual actions
+            address_component["actions"].extend([
+                {
+                    "type": "button",
+                    "label": "Edit",
+                    "action": "edit_address",
+                    "data": {"address_id": address_data.get("id")}
+                },
+                {
+                    "type": "button", 
+                    "label": "Delete",
+                    "action": "delete_address",
+                    "data": {"address_id": address_data.get("id")}
+                }
+            ])
+            
+            # Add set default option if not already default
+            if not address_data.get("isDefault", False):
+                address_component["actions"].insert(1, {
+                    "type": "button",
+                    "label": "Set Default",
+                    "action": "set_default_address", 
+                    "data": {"address_id": address_data.get("id")}
+                })
+            
+            return [address_component]
+            
+    def get_components_for_cart_display(self, cart_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Generate CartItem components for shopping cart display"""
+        self._ensure_registry_loaded()
+        
+        cart_items = cart_data.get('items', []) if cart_data else []
+        components = []
+        
+        for item in cart_items:
+            cart_item_component = {
+                "type": "cart_item",
+                "props": {
+                    "id": item.get("id", item.get("productId")),
+                    "cartItemId": item.get("cartItemId"),
+                    "name": item.get("name", item.get("product_name", "Unknown Item")),
+                    "price": item.get("price", 0),
+                    "quantity": item.get("quantity", 1),
+                    "imageUrl": item.get("imageUrl", item.get("image_url", "/placeholder-product.jpg")),
+                    "brand": item.get("brand", "Unknown Brand")
+                },
+                "actions": []
+            }
+            
+            # Add contextual actions for cart items
+            cart_item_component["actions"].extend([
+                {
+                    "type": "button",
+                    "label": "Update Quantity",
+                    "action": "update_quantity",
+                    "data": {"cart_item_id": item.get("cartItemId"), "product_id": item.get("id")}
+                },
+                {
+                    "type": "button", 
+                    "label": "Remove from Cart",
+                    "action": "remove_from_cart",
+                    "data": {"cart_item_id": item.get("cartItemId"), "product_id": item.get("id")}
+                }
+            ])
+            
+            components.append(cart_item_component)
+        
+        return components
