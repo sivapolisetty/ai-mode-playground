@@ -6,11 +6,16 @@ import httpx
 import json
 import logging
 import os
+import sys
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
+# Add parent directory to path for imports
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+
 from .component_scanner import ComponentScanner
 from .component_cache import ComponentCache, ComponentWatcher
+from shared.observability.langfuse_decorator import trace_tool_execution
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +92,7 @@ class MCPTools:
                 
         return constraints
 
+    @trace_tool_execution("search_products")
     async def search_products(self, query: str, filters: Dict[str, Any] = None) -> Dict[str, Any]:
         """Search for products by query with enhanced filtering"""
         try:
@@ -225,6 +231,7 @@ class MCPTools:
             logger.error(f"Get products failed: {e}")
             return {"success": False, "error": str(e)}
     
+    @trace_tool_execution("get_customer_info")
     async def get_customer_info(self, customer_id: str) -> Dict[str, Any]:
         """Get detailed customer information"""
         try:
@@ -302,6 +309,7 @@ class MCPTools:
             logger.error(f"Get customer orders failed: {e}")
             return {"success": False, "error": str(e)}
     
+    @trace_tool_execution("create_order")
     async def create_order(self, customer_id: str, product_id: str, quantity: int = 1, 
                           shipping_address: str = None, payment_method: str = "Credit Card",
                           special_instructions: str = None) -> Dict[str, Any]:
@@ -481,6 +489,7 @@ class MCPTools:
             logger.error(f"Cancel order failed: {e}")
             return {"success": False, "error": str(e)}
     
+    @trace_tool_execution("track_order")
     async def track_order(self, order_id: str, customer_id: str = None) -> Dict[str, Any]:
         """Get order tracking information"""
         try:
@@ -614,6 +623,7 @@ class MCPTools:
     # UI Component Library MCP Tools
     # ========================================
     
+    @trace_tool_execution("get_component_library")
     async def get_component_library(self) -> Dict[str, Any]:
         """MCP Tool: Get complete UI component library information"""
         try:

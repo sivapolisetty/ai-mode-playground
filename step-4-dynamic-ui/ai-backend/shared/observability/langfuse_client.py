@@ -72,19 +72,20 @@ class LangFuseClient:
         try:
             trace_id = str(uuid.uuid4())
             
-            self.client.trace(
-                id=trace_id,
+            # Use the correct API for creating traces
+            trace = self.client.start_trace(
                 name="step4_dynamic_ui_conversation",
-                user_id=user_id or "anonymous",
-                session_id=session_id or self.session_id,
                 input=user_message,
                 metadata={
                     "step": "4_dynamic_ui",
-                    "feature": "enhanced_agent_rag_ui",
+                    "feature": "enhanced_agent_rag_ui", 
+                    "user_id": user_id or "anonymous",
+                    "session_id": session_id or self.session_id,
                     "timestamp": datetime.now().isoformat(),
                     **(metadata or {})
                 }
             )
+            trace_id = trace.id if hasattr(trace, 'id') else str(uuid.uuid4())
             
             return trace_id
             

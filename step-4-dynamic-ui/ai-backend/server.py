@@ -4,6 +4,7 @@ Enhanced FastAPI server with RAG capabilities and Dynamic UI Generation
 """
 import os
 import time
+import uuid
 import logging
 from datetime import datetime
 from typing import Dict, Any
@@ -102,12 +103,12 @@ async def chat_endpoint(request: ChatRequest):
     """Enhanced chat endpoint with RAG capabilities"""
     session_id = request.context.get("session_id", f"session_{int(time.time())}")
     
-    # Create LangFuse trace
+    # Create LangFuse trace (or generate UUID if LangFuse not available)
     trace_id = langfuse_client.create_trace(
         user_message=request.message,
         session_id=session_id,
         metadata=request.context
-    )
+    ) or str(uuid.uuid4())
     
     try:
         logger.info(f"Enhanced chat request: {request.message}")
@@ -181,6 +182,7 @@ async def chat_endpoint(request: ChatRequest):
             "response_type": response_data.get("response_type", "text_only"),
             "timestamp": datetime.now().isoformat(),
             "session_id": session_id,
+            "trace_id": trace_id,
             "strategy": execution_plan.get("strategy"),
             "debug": {
                 "tools_used": [tc["tool"] for tc in execution_plan.get("tool_calls", [])] if "tool_calls" in execution_plan else response_data.get("orchestration", {}).get("tools_used", []),

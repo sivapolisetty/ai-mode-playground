@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  langfuse-db:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: langfuse
+      POSTGRES_PASSWORD: langfuse
+      POSTGRES_DB: langfuse
+    volumes:
+      - langfuse_db:/var/lib/postgresql/data
+    ports:
+      - "5434:5432"
+
+  langfuse:
+    image: ghcr.io/langfuse/langfuse:latest
+    restart: always
+    depends_on:
+      - langfuse-db
+    ports:
+      - "3001:3000"
+    environment:
+      DATABASE_URL: postgresql://langfuse:langfuse@langfuse-db:5432/langfuse
+      NEXTAUTH_SECRET: step4-dynamic-ui-secret-key-2024
+      NEXTAUTH_URL: http://localhost:3001
+      TELEMETRY_ENABLED: false
+      LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES: false
+      LANGFUSE_DEFAULT_PROJECT_ID: step4-dynamic-ui
+      LANGFUSE_DEFAULT_PROJECT_NAME: "Step 4 Dynamic UI"
+      LANGFUSE_FEATURE_FLAG_DISABLE_CLICKHOUSE: true
+    volumes:
+      - langfuse_uploads:/app/uploads
+
+volumes:
+  langfuse_db:
+  langfuse_uploads:

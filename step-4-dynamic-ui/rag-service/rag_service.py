@@ -2,6 +2,7 @@
 RAG Service for semantic search and knowledge retrieval from Qdrant
 """
 import os
+import sys
 import asyncio
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass
@@ -12,6 +13,18 @@ from qdrant_client import QdrantClient
 from qdrant_client.http.models import Filter, FieldCondition, MatchValue
 from sentence_transformers import SentenceTransformer
 import numpy as np
+
+# Add parent directory to path for imports
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+
+try:
+    from ai_backend.shared.observability.langfuse_decorator import trace_rag_operation
+except ImportError:
+    # Fallback no-op decorator if import fails
+    def trace_rag_operation(collection_type: str = "unknown"):
+        def decorator(func):
+            return func
+        return decorator
 
 # Load environment variables
 load_dotenv()
@@ -121,6 +134,7 @@ class RAGService:
         else:
             return QueryType.TRANSACTIONAL
     
+    @trace_rag_operation("faq")
     async def search_faq(self, query: str, limit: int = None) -> List[SearchResult]:
         """
         Search FAQ knowledge base
@@ -165,6 +179,7 @@ class RAGService:
         logger.info(f"FAQ search returned {len(search_results)} results")
         return search_results
     
+    @trace_rag_operation("business_rules")
     async def search_business_rules(self, query: str, limit: int = None) -> List[SearchResult]:
         """
         Search business rules knowledge base
@@ -317,6 +332,7 @@ class RAGService:
         # Return top results
         return all_results[:limit]
     
+    @trace_rag_operation("hybrid")
     async def process_query(self, query: str, context: Dict[str, Any] = None) -> RAGResponse:
         """
         Process a query and return RAG response

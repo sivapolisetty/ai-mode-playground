@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  langfuse-db:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: langfuse
+      POSTGRES_PASSWORD: langfuse
+      POSTGRES_DB: langfuse
+    volumes:
+      - langfuse_db:/var/lib/postgresql/data
+    ports:
+      - "5434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U langfuse"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  langfuse:
+    image: ghcr.io/langfuse/langfuse:2.82.0
+    restart: always
+    depends_on:
+      langfuse-db:
+        condition: service_healthy
+    ports:
+      - "3001:3000"
+    environment:
+      # Database
+      DATABASE_URL: postgresql://langfuse:langfuse@langfuse-db:5432/langfuse
+      
+      # Auth & Security
+      NEXTAUTH_SECRET: step4-dynamic-ui-secret-key-2024
+      NEXTAUTH_URL: http://localhost:3001
+      SALT: step4-dynamic-ui-strong-salt-key-for-encryption-2024
+      
+      # Deployment
+      HOSTNAME: 0.0.0.0
+      PORT: 3000
+      
+      # Features
+      TELEMETRY_ENABLED: false
+      LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES: true
+      
+      # Default project (will be created automatically)
+      LANGFUSE_DEFAULT_PROJECT_ID: step4-dynamic-ui
+      LANGFUSE_DEFAULT_PROJECT_NAME: "Step 4 Dynamic UI"
+      
+      # Security
+      NEXTAUTH_URL_INTERNAL: http://langfuse:3000
+      
+    volumes:
+      - langfuse_uploads:/app/uploads
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/public/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  langfuse_db:
+  langfuse_uploads:

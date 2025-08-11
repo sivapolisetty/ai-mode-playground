@@ -145,6 +145,12 @@ start_ai_backend() {
     print_status "Starting AI backend server..."
     cd ai-backend
     
+    # Load LangFuse environment variables
+    if [ -f ".env.langfuse" ]; then
+        print_status "Loading LangFuse environment variables..."
+        export $(cat .env.langfuse | grep -v '^#' | xargs)
+    fi
+    
     # Start in background
     nohup ../venv/bin/python server.py > ../ai-backend.log 2>&1 &
     AI_BACKEND_PID=$!
@@ -214,8 +220,8 @@ show_status() {
         print_warning "❌ Qdrant Vector DB: Not running"
     fi
     
-    if check_port 3000; then
-        print_success "✅ LangFuse Observability: http://localhost:3000"
+    if check_port 3001; then
+        print_success "✅ LangFuse Observability: http://localhost:3001"
         print_status "   Agent traces, RAG analysis, UI generation monitoring"
     else
         print_warning "❌ LangFuse: Not running (optional)"
@@ -266,7 +272,11 @@ stop_services() {
     print_status "Stopping Docker containers..."
     docker-compose -f docker-compose.qdrant.yml down > /dev/null 2>&1
     
-    if [ -f "docker-compose.langfuse.yml" ]; then
+    # Stop LangFuse containers - check for working configuration
+    if [ -f "docker-compose.langfuse-v2.yml" ]; then
+        docker-compose -f docker-compose.langfuse-v2.yml down > /dev/null 2>&1
+        print_status "LangFuse containers stopped"
+    elif [ -f "docker-compose.langfuse.yml" ]; then
         docker-compose -f docker-compose.langfuse.yml down > /dev/null 2>&1
         print_status "LangFuse containers stopped"
     fi
@@ -278,65 +288,34 @@ stop_services() {
 check_existing_langfuse() {
     print_service "Checking Existing LangFuse Observability Platform..."
     
-    if check_port 3000; then
-        print_success "LangFuse is running on port 3000"
-        print_status "Dashboard: http://localhost:3000"
+    if check_port 3001; then
+        print_success "LangFuse is running on port 3001"
+        print_status "Dashboard: http://localhost:3001"
         return 0
     else
-        print_warning "LangFuse not found on port 3000. Please start your existing LangFuse instance."
+        print_status "Starting LangFuse instance on port 3001..."
+    fi
+    
+    # Use existing working LangFuse configuration
+    if [ -f "docker-compose.langfuse-v2.yml" ]; then
+        print_status "Using existing LangFuse configuration (docker-compose.langfuse-v2.yml)"
+        LANGFUSE_COMPOSE="docker-compose.langfuse-v2.yml"
+    elif [ -f "docker-compose.langfuse.yml" ]; then
+        print_status "Using fallback LangFuse configuration (docker-compose.langfuse.yml)"
+        LANGFUSE_COMPOSE="docker-compose.langfuse.yml"
+    else
+        print_error "No LangFuse docker-compose configuration found"
         return 1
     fi
     
-    # Check if LangFuse docker-compose exists
-    if [ ! -f "docker-compose.langfuse.yml" ]; then
-        print_status "Creating LangFuse docker-compose configuration..."
-        cat > docker-compose.langfuse.yml << 'EOF'
-version: '3.8'
-
-services:
-  langfuse-db:
-    image: postgres:15-alpine
-    restart: always
-    environment:
-      POSTGRES_USER: langfuse
-      POSTGRES_PASSWORD: langfuse
-      POSTGRES_DB: langfuse
-    volumes:
-      - langfuse_db:/var/lib/postgresql/data
-    ports:
-      - "5433:5432"  # Use different port to avoid conflicts
-
-  langfuse:
-    image: ghcr.io/langfuse/langfuse:latest
-    restart: always
-    depends_on:
-      - langfuse-db
-    ports:
-      - "3001:3000"
-    environment:
-      DATABASE_URL: postgresql://langfuse:langfuse@langfuse-db:5432/langfuse
-      NEXTAUTH_SECRET: your-secret-key-here-step4-ui
-      NEXTAUTH_URL: http://localhost:3001
-      TELEMETRY_ENABLED: false
-      LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES: true
-    volumes:
-      - langfuse_uploads:/app/uploads
-
-volumes:
-  langfuse_db:
-  langfuse_uploads:
-EOF
-        print_success "LangFuse configuration created (PostgreSQL on port 5433)"
-    fi
-    
     print_status "Starting LangFuse containers..."
-    docker-compose -f docker-compose.langfuse.yml up -d
+    docker-compose -f "$LANGFUSE_COMPOSE" up -d
     
     if [ $? -eq 0 ]; then
         print_success "LangFuse containers started"
-        wait_for_service "http://localhost:3001" "LangFuse"
+        wait_for_service "http://localhost:3001/api/public/health" "LangFuse"
         print_success "LangFuse ready at: http://localhost:3001"
-        print_status "Default credentials will be created on first visit"
+        print_status "Your API keys are configured for tracing"
         print_status "Features: Agent tracing, RAG analysis, UI generation monitoring"
     else
         print_warning "LangFuse failed to start (optional service, continuing without it)"
@@ -361,9 +340,10 @@ start_with_observability() {
     print_success "🎉 All Step 4 services are running (including LangFuse observability)!"
     echo
     print_status "🔍 Agent Behavior Analysis:"
-    print_status "• LangFuse Dashboard: http://localhost:3000"
+    print_status "• LangFuse Dashboard: http://localhost:3001"
     print_status "• View agent traces, RAG operations, and UI generation patterns"
     print_status "• Monitor query classification and tool routing decisions"
+    print_status "• Project: ui-agent (cme69v2i5000610rxp11ozgcv)"
     echo
     print_status "To stop services, run: ./start-services.sh stop"
     print_status "To check status, run: ./start-services.sh status"

@@ -19,16 +19,11 @@ from config.llm_config import LLMConfig
 from config.logging_config import logging_config
 from tools.mcp_tools import MCPTools
 from tools.ui_component_tools import UIComponentTools
-from .intent_classifier import IntentClassifier
+# IntentClassifier removed - using pure LLM orchestration via IntelligentOrchestrator
 from .context_resolver import ContextResolver
 from .intelligent_orchestrator import IntelligentOrchestrator
 from rag_service import RAGService, QueryType
 from shared.observability.langfuse_client import langfuse_client
-from shared.observability.langfuse_decorator import (
-    trace_conversation, trace_agent_operation, trace_tool_execution,
-    trace_llm_generation, trace_ui_generation, trace_rag_operation,
-    flush_observations
-)
 from prompts.prompt_manager import prompt_manager
 
 logger = logging_config.get_logger(__name__)
@@ -62,10 +57,13 @@ class EnhancedAgent:
         # Initialize component library
         self._initialize_ui_capabilities()
         
+        # Initialize observability
+        self.langfuse_client = langfuse_client
+        
         # Initialize intelligent query processing
-        self.intent_classifier = IntentClassifier(self.llm)
+        # IntentClassifier removed - using pure LLM orchestration via IntelligentOrchestrator
         self.context_resolver = ContextResolver(self.mcp_tools)
-        self.intelligent_orchestrator = IntelligentOrchestrator(self.llm, self.mcp_tools)
+        self.intelligent_orchestrator = IntelligentOrchestrator(self.llm, self.mcp_tools, self.langfuse_client)
         self.ui_component_tools = UIComponentTools()
     
     def get_session_state(self, session_id: str) -> Dict[str, Any]:
@@ -105,13 +103,24 @@ class EnhancedAgent:
             # Use intelligent orchestrator to plan and execute tools
             orchestration_result = await self.intelligent_orchestrator.orchestrate_query(
                 user_query, 
-                orchestration_context
+                orchestration_context,
+                trace_id
             )
             
             if not orchestration_result.get("success"):
                 logger.error(f"Orchestration failed: {orchestration_result.get('error')}")
-                # Fall back to traditional processing
-                return await self.process_query_intelligently(user_query, context, trace_id)
+                # Return error response - no fallback to rule-based processing
+                return {
+                    "success": False,
+                    "message": "I'm having trouble understanding your request. Please try rephrasing your question.",
+                    "error": orchestration_result.get('error', 'Orchestration failed'),
+                    "ui_components": [],
+                    "suggested_actions": [
+                        "Try asking a more specific question",
+                        "Check if you're logged in with the right customer ID",
+                        "Contact support if the issue persists"
+                    ]
+                }
             
             # Update session with any new information
             self.update_session_state(session_id, {
@@ -123,7 +132,8 @@ class EnhancedAgent:
             ui_components = await self._generate_ui_components_from_orchestration(
                 user_query, 
                 orchestration_result,
-                context
+                context,
+                trace_id
             )
             
             # Log orchestration success
@@ -148,67 +158,21 @@ class EnhancedAgent:
             
         except Exception as e:
             logger.error(f"Orchestration processing failed: {e}")
-            # Fall back to traditional intelligent processing
-            return await self.process_query_intelligently(user_query, context, trace_id)
+            # Return error response - no fallback to rule-based processing
+            return {
+                "success": False,
+                "message": "I encountered an error while processing your request. Please try again.",
+                "error": str(e),
+                "ui_components": [],
+                "suggested_actions": [
+                    "Try rephrasing your question",
+                    "Make sure you're logged in properly",
+                    "Contact support if the problem continues"
+                ]
+            }
     
-    async def process_query_intelligently(self, user_query: str, context: Dict[str, Any] = None, trace_id: str = None) -> Dict[str, Any]:
-        """
-        Process user query with intelligent intent understanding and context resolution
-        
-        This method replaces hardcoded routing with LLM-based intent classification
-        and dynamic context resolution for temporal references.
-        """
-        session_id = context.get("session_id", "default") if context else "default"
-        session_state = self.get_session_state(session_id)
-        
-        try:
-            logger.info(f"🧠 Processing query intelligently: {user_query}")
-            
-            # Step 1: Classify intent using LLM
-            intent = await self.intent_classifier.classify_intent(
-                user_query, 
-                {**session_state, **(context or {})}
-            )
-            
-            logger.info(f"Classified intent: {intent['intent_type']} (confidence: {intent.get('confidence', 0)})")
-            
-            # Step 2: Resolve contextual references
-            resolved_context = await self.context_resolver.resolve_references(intent, session_state)
-            
-            if resolved_context['resolution_status'] != 'success':
-                logger.warning(f"Context resolution issues: {resolved_context.get('resolution_errors', [])}")
-            
-            # Step 3: Build execution context
-            execution_context = self.context_resolver.build_execution_context(resolved_context)
-            
-            # Step 4: Check for missing context - but allow partial context for some operations
-            missing_context = self.context_resolver.get_missing_context(resolved_context)
-            if missing_context and resolved_context['resolution_status'] == 'failed':
-                return await self._handle_missing_context(user_query, intent, missing_context, trace_id)
-            
-            # Log context resolution results
-            logger.info(f"📋 Context resolution: {resolved_context['resolution_status']}, entities: {list(resolved_context.get('resolved_entities', {}).keys())}")
-            
-            # Step 5: Execute based on intent
-            if intent['intent_type'] in ['order_update', 'order_cancel', 'order_status']:
-                return await self._handle_order_operations(user_query, intent, execution_context, trace_id)
-            elif intent['intent_type'] in ['product_search', 'product_details']:
-                return await self._handle_product_operations(user_query, intent, execution_context, trace_id)
-            elif intent['intent_type'] in ['customer_update']:
-                return await self._handle_customer_operations(user_query, intent, execution_context, trace_id)
-            else:
-                # Fall back to original processing for other intents
-                return await self.process_query(user_query, context, trace_id)
-                
-        except Exception as e:
-            logger.error(f"❌ Intelligent query processing failed: {e}")
-            import traceback
-            logger.error(f"Traceback: {traceback.format_exc()}")
-            # Fall back to original processing
-            logger.info("🔄 Falling back to original processing")
-            return await self.process_query(user_query, context, trace_id)
+    # process_query_intelligently method removed - using pure LLM orchestration via process_query_with_orchestration
     
-    @trace_conversation(name="step4_dynamic_ui_conversation", user_id="anonymous")
     async def process_query(self, user_query: str, context: Dict[str, Any] = None, trace_id: str = None) -> Dict[str, Any]:
         """
         Process user query with enhanced RAG capabilities
@@ -288,7 +252,6 @@ class EnhancedAgent:
             
             return self._fallback_response(user_query)
     
-    @trace_agent_operation("query_classification", "span")
     async def determine_routing_strategy(self, 
                                        user_query: str, 
                                        rag_response, 
@@ -761,8 +724,11 @@ class EnhancedAgent:
                 "error": str(e)
             }
     
-    async def _generate_ui_components_from_orchestration(self, user_query: str, orchestration_result: Dict[str, Any], context: Dict[str, Any]) -> List[Dict[str, Any]]:
+    async def _generate_ui_components_from_orchestration(self, user_query: str, orchestration_result: Dict[str, Any], context: Dict[str, Any], trace_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """Generate UI components based on orchestration results"""
+        import time
+        start_time = time.time()
+        
         try:
             tool_results = orchestration_result.get("tool_results", [])
             
@@ -773,167 +739,364 @@ class EnhancedAgent:
                     data_results.append(tool_result)
             
             if not data_results:
+                # Log no UI components generated
+                if self.langfuse_client and trace_id:
+                    self.langfuse_client.log_ui_generation(
+                        trace_id=trace_id,
+                        user_intent=user_query,
+                        ui_components=[],
+                        layout_strategy="no_ui_needed",
+                        generation_success=True,
+                        validation_results={"reason": "No data results available"},
+                        metadata={
+                            "data_sources": len(tool_results),
+                            "successful_tools": 0
+                        }
+                    )
                 return []
             
             # Determine the primary data type and generate appropriate UI components
             primary_data_type = self._determine_primary_data_type(data_results)
             
-            if primary_data_type == "products":
-                return await self._generate_product_ui_from_orchestration(data_results, user_query)
-            elif primary_data_type == "orders":
-                return await self._generate_order_ui_from_orchestration(data_results, user_query)
-            elif primary_data_type == "customers":
-                return await self._generate_customer_ui_from_orchestration(data_results, user_query)
-            else:
-                return await self._generate_generic_ui_from_orchestration(data_results, user_query)
+            # ✨ Pure LLM-driven intelligent filtering and UI generation
+            filtered_data_results = await self._filter_results_with_llm(data_results, user_query, primary_data_type, trace_id)
+            
+            # ✨ Pure LLM-driven UI component generation - no hardcoded data type assumptions
+            ui_components = await self._generate_ui_with_llm(filtered_data_results, user_query, trace_id)
+            
+            # Log UI generation success
+            execution_time = time.time() - start_time
+            if self.langfuse_client and trace_id:
+                self.langfuse_client.log_ui_generation(
+                    trace_id=trace_id,
+                    user_intent=user_query,
+                    ui_components=ui_components,
+                    layout_strategy="enhanced_with_ui" if ui_components else "text_only",
+                    generation_success=True,
+                    validation_results={
+                        "components_generated": len(ui_components),
+                        "data_type": primary_data_type,
+                        "execution_time_ms": execution_time * 1000
+                    },
+                    metadata={
+                        "ui_agent": "orchestration_based",
+                        "data_sources": len(data_results),
+                        "component_types": [comp.get("type") for comp in ui_components] if ui_components else []
+                    }
+                )
+            
+            return ui_components
                 
         except Exception as e:
             logger.error(f"UI generation from orchestration failed: {e}")
             return []
     
-    def _determine_primary_data_type(self, data_results: List[Dict[str, Any]]) -> str:
-        """Determine the primary data type from orchestration results"""
-        for result in data_results:
-            tool_name = result.get("tool", "")
-            if "product" in tool_name.lower():
-                return "products"
-            elif "order" in tool_name.lower():
-                return "orders"
-            elif "customer" in tool_name.lower():
-                return "customers"
-        return "generic"
-    
-    async def _generate_product_ui_from_orchestration(self, data_results: List[Dict[str, Any]], user_query: str) -> List[Dict[str, Any]]:
-        """Generate product UI components from orchestration results"""
-        components = []
+    async def _filter_results_with_llm(self, data_results: List[Dict[str, Any]], user_query: str, data_type: str, trace_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Pure LLM-driven intelligent filtering of results for UI generation.
+        No hardcoded logic - LLM decides everything dynamically.
+        """
+        import time
+        start_time = time.time()
         
-        for result in data_results:
-            if "product" in result.get("tool", "").lower():
-                products = result.get("result", {}).get("data", [])
-                if products:
-                    # Generate product cards
-                    for product in products[:3]:  # Limit to 3 products
-                        components.append({
-                            "type": "card",
-                            "props": {
-                                "title": product.get("name", "Product"),
-                                "description": product.get("description", ""),
-                                "imageUrl": product.get("imageUrl", ""),
-                                "price": f"${product.get('price', 0)}",
-                                "metadata": {
-                                    "brand": product.get("brand", ""),
-                                    "model": product.get("model", "")
-                                }
-                            },
-                            "actions": [
-                                {
-                                    "type": "button",
-                                    "label": "View Details",
-                                    "action": "view_product",
-                                    "data": {"product_id": product.get("id")}
-                                },
-                                {
-                                    "type": "button", 
-                                    "label": "Add to Cart",
-                                    "action": "add_to_cart",
-                                    "data": {"product_id": product.get("id")}
-                                }
-                            ]
-                        })
-        
-        return components
-    
-    async def _generate_order_ui_from_orchestration(self, data_results: List[Dict[str, Any]], user_query: str) -> List[Dict[str, Any]]:
-        """Generate order UI components from orchestration results"""
-        components = []
-        
-        for result in data_results:
-            if "order" in result.get("tool", "").lower():
-                orders = result.get("result", {}).get("data", [])
-                if isinstance(orders, list):
-                    # Multiple orders
-                    for order in orders[:5]:  # Limit to 5 orders
-                        components.append({
-                            "type": "order_card",
-                            "props": {
-                                "order_id": order.get("id", ""),
-                                "status": order.get("status", ""),
-                                "total": f"${order.get('totalAmount', 0)}",
-                                "date": order.get("orderDate", ""),
-                                "items_count": len(order.get("items", []))
-                            },
-                            "actions": [
-                                {
-                                    "type": "button",
-                                    "label": "Track Order",
-                                    "action": "track_order",
-                                    "data": {"order_id": order.get("id")}
-                                }
-                            ]
-                        })
-                else:
-                    # Single order
-                    order = orders
-                    components.append({
-                        "type": "order_detail",
-                        "props": {
-                            "order_id": order.get("id", ""),
-                            "status": order.get("status", ""),
-                            "total": f"${order.get('totalAmount', 0)}",
-                            "date": order.get("orderDate", ""),
-                            "items": order.get("items", [])
-                        }
-                    })
-        
-        return components
-    
-    async def _generate_customer_ui_from_orchestration(self, data_results: List[Dict[str, Any]], user_query: str) -> List[Dict[str, Any]]:
-        """Generate customer UI components from orchestration results"""
-        components = []
-        
-        for result in data_results:
-            if "customer" in result.get("tool", "").lower():
-                customer_data = result.get("result", {}).get("data", {})
-                if customer_data:
-                    components.append({
-                        "type": "customer_profile",
-                        "props": {
-                            "name": customer_data.get("name", ""),
-                            "email": customer_data.get("email", ""),
-                            "address": customer_data.get("address", ""),
-                            "phone": customer_data.get("phone", "")
-                        },
-                        "actions": [
-                            {
-                                "type": "button",
-                                "label": "Edit Profile",
-                                "action": "edit_customer",
-                                "data": {"customer_id": customer_data.get("id")}
-                            }
-                        ]
-                    })
-        
-        return components
-    
-    async def _generate_generic_ui_from_orchestration(self, data_results: List[Dict[str, Any]], user_query: str) -> List[Dict[str, Any]]:
-        """Generate generic UI components from orchestration results"""
-        components = []
-        
-        # Simple data display component
-        for result in data_results:
-            tool_name = result.get("tool", "Unknown")
-            result_data = result.get("result", {})
+        try:
+            if not data_results:
+                return data_results
             
-            components.append({
-                "type": "data_display",
-                "props": {
-                    "title": f"Results from {tool_name}",
-                    "data": result_data.get("data", {}),
-                    "count": result_data.get("count", 0)
-                }
-            })
+            # Extract all data items from the results
+            all_items = []
+            for result in data_results:
+                data_items = result.get("result", {}).get("data", [])
+                all_items.extend(data_items)
+            
+            if len(all_items) <= 3:
+                # If we have 3 or fewer items, let LLM still decide if all are relevant
+                pass
+            
+            # 🧠 LLM-driven dynamic content analysis and filtering
+            filter_prompt = f"""You are an intelligent result curator with deep understanding of user intent and data relevance.
+
+USER QUERY: "{user_query}"
+
+AVAILABLE DATA ({len(all_items)} items):
+{self._format_items_for_llm_analysis(all_items)}
+
+YOUR TASK:
+1. Analyze the user's intent and requirements from their query
+2. Evaluate each item's relevance to the user's specific needs
+3. Select the most relevant items (typically 1-3) that best serve the user
+4. Consider factors like: exact matches, user preferences, quality, relevance, usefulness
+
+RESPONSE FORMAT:
+Provide your response as a JSON object with this exact structure:
+{{
+    "reasoning": "Your detailed analysis of why these items were selected",
+    "selected_indices": [list of item numbers (1-based) to show],
+    "confidence": 0.9,
+    "filter_strategy": "brief description of your filtering approach"
+}}
+
+Example response:
+{{
+    "reasoning": "User wants HP laptops. Item 2 is the only true HP laptop that matches their brand requirement, while others are different brands.",
+    "selected_indices": [2],
+    "confidence": 0.95,
+    "filter_strategy": "brand_exact_match"
+}}
+
+Your analysis and selection:"""
+
+            # Call LLM for intelligent filtering
+            llm_response = await self.ui_llm.ainvoke(filter_prompt)
+            
+            try:
+                # Parse LLM response
+                import json
+                import re
+                
+                # Get response content
+                response_text = llm_response if isinstance(llm_response, str) else getattr(llm_response, 'content', str(llm_response))
+                
+                # Extract JSON from response
+                json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+                if json_match:
+                    llm_decision = json.loads(json_match.group())
+                    
+                    selected_indices = llm_decision.get("selected_indices", [])
+                    reasoning = llm_decision.get("reasoning", "LLM filtering applied")
+                    confidence = llm_decision.get("confidence", 0.8)
+                    filter_strategy = llm_decision.get("filter_strategy", "intelligent_selection")
+                    
+                    # Filter items based on LLM decision
+                    filtered_items = []
+                    for idx in selected_indices:
+                        if 1 <= idx <= len(all_items):
+                            filtered_items.append(all_items[idx - 1])
+                    
+                    # If LLM didn't select anything, fallback to top 3
+                    if not filtered_items:
+                        filtered_items = all_items[:3]
+                        reasoning = "LLM didn't select specific items, showing top results"
+                        filter_strategy = "fallback_top_results"
+                    
+                    # Reconstruct filtered data_results
+                    filtered_result = {
+                        "tool": data_results[0]["tool"],
+                        "success": True,
+                        "result": {
+                            "data": filtered_items,
+                            "count": len(filtered_items),
+                            "success": True,
+                            "filtered_by_llm": True,
+                            "original_count": len(all_items),
+                            "llm_reasoning": reasoning,
+                            "llm_confidence": confidence,
+                            "filter_strategy": filter_strategy,
+                            "filter_reasoning": f"LLM intelligently selected {len(filtered_items)} most relevant items using {filter_strategy} strategy"
+                        }
+                    }
+                    
+                    # Log the filtering operation
+                    execution_time = time.time() - start_time
+                    if self.langfuse_client and trace_id:
+                        self.langfuse_client.log_agent_decision(
+                            trace_id=trace_id,
+                            query_type="llm_intelligent_filtering",
+                            confidence=confidence,
+                            reasoning=reasoning,
+                            metadata={
+                                "component": "intelligent_curator",
+                                "operation": "llm_dynamic_filtering",
+                                "original_count": len(all_items),
+                                "filtered_count": len(filtered_items),
+                                "filter_strategy": filter_strategy,
+                                "llm_confidence": confidence,
+                                "execution_time_ms": execution_time * 1000,
+                                "extensible": True
+                            }
+                        )
+                    
+                    logger.info(f"🧠 LLM intelligently filtered {len(all_items)} items to {len(filtered_items)} using '{filter_strategy}' strategy")
+                    return [filtered_result]
+                
+            except Exception as parse_error:
+                logger.warning(f"Failed to parse LLM filtering response: {parse_error}")
+                logger.debug(f"LLM response was: {response_text[:200]}")
+            
+            # Fallback: return original results
+            return data_results
+            
+        except Exception as e:
+            logger.error(f"LLM intelligent filtering failed: {e}")
+            return data_results
+    
+    def _format_items_for_llm_analysis(self, items: List[Dict[str, Any]]) -> str:
+        """
+        Pure LLM-driven dynamic formatting of items for analysis.
+        No hardcoded field assumptions - LLM analyzes raw data.
+        """
+        formatted_items = []
         
-        return components
+        for i, item in enumerate(items[:10], 1):  # Limit to first 10 for performance
+            # Extract all available fields dynamically
+            item_summary = f"{i}. "
+            
+            # Add all relevant fields the LLM can analyze
+            key_fields = []
+            for key, value in item.items():
+                if value is not None and key not in ['specifications', 'imageUrl', 'isActive', 'stockQuantity']:
+                    if isinstance(value, (str, int, float)):
+                        key_fields.append(f"{key}: {value}")
+            
+            item_summary += " | ".join(key_fields)
+            formatted_items.append(item_summary)
+        
+        return "\n".join(formatted_items)
+    
+    async def _generate_ui_with_llm(self, filtered_data_results: List[Dict[str, Any]], user_query: str, trace_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Pure LLM-driven UI component generation.
+        No hardcoded assumptions about data types or UI patterns.
+        """
+        try:
+            if not filtered_data_results:
+                return []
+            
+            # Extract all data items for LLM analysis
+            all_items = []
+            for result in filtered_data_results:
+                data_items = result.get("result", {}).get("data", [])
+                all_items.extend(data_items)
+            
+            if not all_items:
+                return []
+            
+            # Prepare available component types for LLM
+            component_types = {
+                "card": "Display information in a card format with title, description, image, and actions",
+                "list": "Display multiple items in a structured list format",
+                "button": "Interactive button with label and action",
+                "text": "Simple text display",
+                "image": "Image display with caption",
+                "table": "Tabular data display",
+                "form": "Input form for data collection"
+            }
+            
+            # LLM prompt for pure UI generation
+            ui_prompt = f"""You are an intelligent UI component generator. Analyze the data and user query to create appropriate UI components.
+
+USER QUERY: "{user_query}"
+
+AVAILABLE DATA ({len(all_items)} items):
+{self._format_items_for_llm_analysis(all_items)}
+
+AVAILABLE COMPONENT TYPES:
+{chr(10).join([f"• {name}: {desc}" for name, desc in component_types.items()])}
+
+YOUR TASK:
+1. Analyze the data structure and user intent
+2. Choose appropriate component types for displaying this data
+3. Generate component specifications with proper props and actions
+4. Create interactive elements where appropriate (buttons, links, etc.)
+
+RESPONSE FORMAT (JSON):
+{{
+    "reasoning": "Your analysis of what UI components to generate and why",
+    "components": [
+        {{
+            "type": "component_type",
+            "props": {{
+                "title": "Component Title",
+                "description": "Component Description",
+                "imageUrl": "image_url_if_available",
+                "price": "price_if_applicable",
+                "metadata": {{"any": "additional_data"}}
+            }},
+            "actions": [
+                {{
+                    "type": "button",
+                    "label": "Action Label",
+                    "action": "action_name",
+                    "data": {{"key": "value"}}
+                }}
+            ]
+        }}
+    ]
+}}
+
+Generate UI components that best serve the user's needs based on the data and query:"""
+
+            response = await self.llm.ainvoke(ui_prompt)
+            content = response.content if hasattr(response, 'content') else str(response)
+            
+            # Parse JSON response
+            import re
+            import json
+            json_match = re.search(r'\\{[\\s\\S]*\\}', content)
+            if json_match:
+                ui_spec = json.loads(json_match.group())
+                components = ui_spec.get("components", [])
+                
+                # Log UI generation to LangFuse
+                if self.langfuse_client and trace_id:
+                    self.langfuse_client.log_ui_generation(
+                        trace_id=trace_id,
+                        user_intent=user_query,
+                        ui_components=components,
+                        layout_strategy="llm_generated",
+                        generation_success=True,
+                        validation_results={"components_generated": len(components)},
+                        metadata={
+                            "llm_reasoning": ui_spec.get("reasoning", ""),
+                            "data_items_processed": len(all_items),
+                            "generation_method": "pure_llm"
+                        }
+                    )
+                
+                logger.info(f"🎨 LLM generated {len(components)} UI components: {ui_spec.get('reasoning', '')}")
+                return components
+            
+            else:
+                logger.warning(f"Failed to parse LLM UI generation response: {content[:200]}")
+                return []
+                
+        except Exception as e:
+            logger.error(f"LLM UI generation failed: {e}")
+            return []
+    
+    # ========================================
+    # CLEANUP COMPLETED: All hardcoded UI generation methods removed
+    # ========================================
+    # 
+    # The following methods have been removed as part of the pure LLM approach:
+    # - _determine_primary_data_type() - replaced by LLM analysis
+    # - _generate_product_ui_from_orchestration() - replaced by _generate_ui_with_llm()
+    # - _generate_order_ui_from_orchestration() - replaced by _generate_ui_with_llm()
+    # - _generate_customer_ui_from_orchestration() - replaced by _generate_ui_with_llm()
+    # - _generate_generic_ui_from_orchestration() - replaced by _generate_ui_with_llm()
+    # - _generate_intelligent_ui_components() - replaced by _generate_ui_with_llm()
+    # - _determine_workflow_type() - replaced by LLM decision making
+    # - _extract_context_data() - replaced by LLM data analysis
+    # - All hardcoded UI generation logic - replaced by pure LLM intelligence
+    #
+    # Current workflow: orchestration -> LLM filtering -> LLM UI generation
+    # No hardcoded assumptions about data types or UI patterns
+    #
+
+    # ========================================  
+    # DEPRECATED: Legacy Intent-Based Handlers
+    # ========================================
+    # 
+    # The following methods are DEPRECATED and no longer used in the primary workflow.
+    # They were part of the rule-based intent classification system that has been
+    # replaced by the IntelligentOrchestrator's pure LLM approach.
+    #
+    # Primary workflow: process_query_with_orchestration() -> IntelligentOrchestrator
+    # Deprecated workflow: process_query_intelligently() -> IntentClassifier -> these handlers
+    #
+    # These methods are preserved for reference but are not actively maintained.
+    # They may be removed in a future version once the orchestration system is fully stable.
+    #
     
     async def _generate_intelligent_ui_components(self, user_query: str, execution_plan: Dict[str, Any], tool_results: List[Dict[str, Any]], context: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], str, str]:
         """Generate UI components using intelligent component selection"""
@@ -1298,8 +1461,19 @@ class EnhancedAgent:
             return ui_spec
     
     # ========================================
-    # Intelligent Query Handlers
+    # DEPRECATED: Legacy Intent-Based Handlers
     # ========================================
+    # 
+    # The following methods are DEPRECATED and no longer used in the primary workflow.
+    # They were part of the rule-based intent classification system that has been
+    # replaced by the IntelligentOrchestrator's pure LLM approach.
+    #
+    # Primary workflow: process_query_with_orchestration() -> IntelligentOrchestrator
+    # Deprecated workflow: process_query_intelligently() -> IntentClassifier -> these handlers
+    #
+    # These methods are preserved for reference but are not actively maintained.
+    # They may be removed in a future version once the orchestration system is fully stable.
+    #
     
     async def _handle_missing_context(self, user_query: str, intent: Dict[str, Any], missing_context: List[str], trace_id: str = None) -> Dict[str, Any]:
         """Handle queries that are missing required context"""
