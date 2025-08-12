@@ -38,8 +38,8 @@ class LangFuseClient:
         """Initialize LangFuse client with environment variables."""
         try:
             host = os.getenv('LANGFUSE_HOST', 'http://localhost:3001')
-            public_key = os.getenv('LANGFUSE_PUBLIC_KEY', '')
-            secret_key = os.getenv('LANGFUSE_SECRET_KEY', '')
+            public_key = os.getenv('LANGFUSE_PUBLIC_KEY', 'pk-lf-6c9dc00f-e286-40ff-a5ea-2a37c3e616c1')
+            secret_key = os.getenv('LANGFUSE_SECRET_KEY', 'sk-lf-03aface1-27d1-4982-8a77-2837e679e4ec')
             
             if not public_key or not secret_key:
                 logger.info("LangFuse credentials not configured. Running without observability.")
@@ -72,8 +72,8 @@ class LangFuseClient:
         try:
             trace_id = str(uuid.uuid4())
             
-            # Use the correct API for creating traces
-            trace = self.client.start_trace(
+            # Use the correct API for creating traces (SDK v2)
+            trace = self.client.trace(
                 name="step4_dynamic_ui_conversation",
                 input=user_message,
                 metadata={

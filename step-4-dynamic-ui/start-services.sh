@@ -224,7 +224,8 @@ show_status() {
         print_success "✅ LangFuse Observability: http://localhost:3001"
         print_status "   Agent traces, RAG analysis, UI generation monitoring"
     else
-        print_warning "❌ LangFuse: Not running (optional)"
+        print_error "❌ LangFuse: Not running (REQUIRED)"
+        print_error "   Start LangFuse first: ./langfuse start"
     fi
     
     if check_port 8001; then
@@ -272,53 +273,66 @@ stop_services() {
     print_status "Stopping Docker containers..."
     docker-compose -f docker-compose.qdrant.yml down > /dev/null 2>&1
     
-    # Stop LangFuse containers - check for working configuration
-    if [ -f "docker-compose.langfuse-v2.yml" ]; then
-        docker-compose -f docker-compose.langfuse-v2.yml down > /dev/null 2>&1
-        print_status "LangFuse containers stopped"
-    elif [ -f "docker-compose.langfuse.yml" ]; then
-        docker-compose -f docker-compose.langfuse.yml down > /dev/null 2>&1
-        print_status "LangFuse containers stopped"
+    # Stop LangFuse using dedicated manager
+    if [ -f "$LANGFUSE_MANAGER" ]; then
+        print_status "Stopping LangFuse via dedicated manager..."
+        "$LANGFUSE_MANAGER" stop > /dev/null 2>&1
+        print_status "LangFuse stopped via dedicated manager"
     fi
     
     print_success "Services stopped"
 }
 
-# Function to check existing LangFuse (running on port 3000)
+# LangFuse Manager Path
+LANGFUSE_MANAGER="ai-backend/shared/observability/langfuse_manager.sh"
+
+# Function to check existing LangFuse using dedicated manager
 check_existing_langfuse() {
-    print_service "Checking Existing LangFuse Observability Platform..."
+    print_service "Checking LangFuse via dedicated manager..."
     
-    if check_port 3001; then
-        print_success "LangFuse is running on port 3001"
-        print_status "Dashboard: http://localhost:3001"
-        return 0
+    if [ -f "$LANGFUSE_MANAGER" ]; then
+        "$LANGFUSE_MANAGER" health
+        return $?
     else
-        print_status "Starting LangFuse instance on port 3001..."
-    fi
-    
-    # Use existing working LangFuse configuration
-    if [ -f "docker-compose.langfuse-v2.yml" ]; then
-        print_status "Using existing LangFuse configuration (docker-compose.langfuse-v2.yml)"
-        LANGFUSE_COMPOSE="docker-compose.langfuse-v2.yml"
-    elif [ -f "docker-compose.langfuse.yml" ]; then
-        print_status "Using fallback LangFuse configuration (docker-compose.langfuse.yml)"
-        LANGFUSE_COMPOSE="docker-compose.langfuse.yml"
-    else
-        print_error "No LangFuse docker-compose configuration found"
+        print_error "LangFuse manager script not found: $LANGFUSE_MANAGER"
         return 1
     fi
+}
+
+# Function to start LangFuse using dedicated manager
+start_langfuse_with_manager() {
+    print_service "Starting LangFuse via dedicated manager..."
     
-    print_status "Starting LangFuse containers..."
-    docker-compose -f "$LANGFUSE_COMPOSE" up -d
-    
-    if [ $? -eq 0 ]; then
-        print_success "LangFuse containers started"
-        wait_for_service "http://localhost:3001/api/public/health" "LangFuse"
-        print_success "LangFuse ready at: http://localhost:3001"
-        print_status "Your API keys are configured for tracing"
-        print_status "Features: Agent tracing, RAG analysis, UI generation monitoring"
+    if [ -f "$LANGFUSE_MANAGER" ]; then
+        "$LANGFUSE_MANAGER" start
+        return $?
     else
-        print_warning "LangFuse failed to start (optional service, continuing without it)"
+        print_error "LangFuse manager script not found: $LANGFUSE_MANAGER"
+        return 1
+    fi
+}
+
+# Function to start LangFuse only using dedicated manager
+start_langfuse_only() {
+    print_service "🚀 Delegating to LangFuse Manager"
+    print_service "================================="
+    echo
+    
+    if [ -f "$LANGFUSE_MANAGER" ]; then
+        # Use the dedicated LangFuse manager
+        "$LANGFUSE_MANAGER" start
+        if [ $? -eq 0 ]; then
+            print_success "✨ Use dedicated LangFuse manager for all observability operations:"
+            print_status "   $LANGFUSE_MANAGER status    # Check LangFuse status"
+            print_status "   $LANGFUSE_MANAGER logs      # View LangFuse logs"
+            print_status "   $LANGFUSE_MANAGER stop      # Stop LangFuse"
+            echo
+            return 0
+        else
+            return 1
+        fi
+    else
+        print_error "LangFuse manager not found: $LANGFUSE_MANAGER"
         return 1
     fi
 }
@@ -331,7 +345,7 @@ start_with_observability() {
     
     check_prerequisites || return 1
     start_qdrant || return 1
-    check_existing_langfuse || print_warning "Continuing without LangFuse observability"
+    start_langfuse_with_manager || print_warning "Continuing without LangFuse observability"
     seed_knowledge_base || return 1
     start_ai_backend || return 1
     
@@ -367,11 +381,22 @@ start_with_observability() {
     done
 }
 
-# Function to start minimal services (no LangFuse)
+# Function to start Step 4 services (requires LangFuse to be already running)
 start_minimal() {
     print_service "🚀 Step 4 Dynamic UI - Starting Core Services"
     print_service "============================================="
     echo
+    
+    # Check if LangFuse is running first (STRICTLY REQUIRED)
+    if check_port 3001; then
+        print_success "✅ LangFuse detected on port 3001"
+    else
+        print_error "❌ LangFuse is not running. LangFuse is REQUIRED and must be started first."
+        print_error "   Start LangFuse: ./langfuse start"
+        print_error "   Or use: ./start-services.sh langfuse-only"
+        print_error "🚫 Cannot proceed without LangFuse observability platform."
+        return 1
+    fi
     
     check_prerequisites || return 1
     start_qdrant || return 1
@@ -380,7 +405,7 @@ start_minimal() {
     
     show_status
     
-    print_success "🎉 Step 4 services are running!"
+    print_success "🎉 Step 4 services are running with LangFuse observability!"
     echo
     print_status "To stop services, run: ./start-services.sh stop"
     print_status "To check status, run: ./start-services.sh status"
@@ -404,11 +429,36 @@ start_minimal() {
     done
 }
 
+# Function to enforce LangFuse requirement (replaces start_without_langfuse)
+enforce_langfuse_requirement() {
+    print_error "🚫 LangFuse observability is REQUIRED for Step 4 Dynamic UI"
+    print_error "   Step 4 cannot operate without observability and tracing."
+    print_error "   This is a core architectural requirement."
+    echo
+    print_status "To start LangFuse observability:"
+    print_status "   ./langfuse start"
+    print_status "   OR: ./start-services.sh langfuse-only"
+    echo
+    print_status "Then start Step 4 services:"
+    print_status "   ./start-services.sh start"
+    echo
+    exit 1
+}
+
 # Main function
 main() {
     case "${1:-start}" in
         "start")
             start_minimal
+            ;;
+        "no-langfuse")
+            print_error "❌ 'no-langfuse' mode has been removed."
+            print_error "   LangFuse observability is now REQUIRED for Step 4."
+            print_error "   Start LangFuse first: ./langfuse start"
+            exit 1
+            ;;
+        "langfuse-only")
+            start_langfuse_only
             ;;
         "full"|"observability"|"langfuse")
             start_with_observability
@@ -447,20 +497,34 @@ main() {
             echo "Usage: ./start-services.sh [command]"
             echo
             echo "Commands:"
-            echo "  start         Start core services (Qdrant + AI Backend)"
+            echo "  start         Start Step 4 services (REQUIRES LangFuse running on port 3001)"
+            echo "  langfuse-only Start ONLY LangFuse observability platform"
             echo "  full          Start all services including LangFuse observability"
-            echo "  langfuse      Same as 'full' - starts with LangFuse"
             echo "  stop          Stop all services"
             echo "  status        Show service status"
-            echo "  restart       Restart core services (stops existing automatically)"
+            echo "  restart       Restart Step 4 services"
             echo "  restart-full  Restart all services including LangFuse"
             echo "  qdrant        Start only Qdrant"
             echo "  seed          Seed knowledge base"
             echo "  ai            Start only AI backend"
             echo "  help          Show this help"
             echo
-            echo "For agent behavior analysis, use: ./start-services.sh full"
-            echo "If services are already running, use: ./start-services.sh restart"
+            echo "⚠️  IMPORTANT: LangFuse observability is REQUIRED for all Step 4 operations."
+            echo
+            echo "Recommended workflow:"
+            echo "  1. ./start-services.sh langfuse-only    (in terminal 1)"
+            echo "  2. ./start-services.sh start            (in terminal 2)"
+            echo
+            echo "Or start everything together:"
+            echo "  ./start-services.sh full"
+            echo
+            echo "Dedicated LangFuse Management:"
+            echo "  ./langfuse start     # Start LangFuse only (convenient shortcut)"
+            echo "  ./langfuse status    # Check LangFuse status"
+            echo "  ./langfuse stop      # Stop LangFuse"
+            echo "  ./langfuse logs      # View LangFuse logs"
+            echo
+            echo "Full path: $LANGFUSE_MANAGER [command]"
             ;;
         *)
             print_error "Unknown command: $1"

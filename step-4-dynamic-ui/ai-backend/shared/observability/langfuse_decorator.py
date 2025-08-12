@@ -45,35 +45,73 @@ class LangFuseConfig:
                 with open(env_file, 'r') as f:
                     for line in f:
                         if line.strip() and not line.startswith('#'):
-                            key, value = line.strip().split('=', 1)
-                            os.environ[key] = value
+                            if '=' in line:
+                                key, value = line.strip().split('=', 1)
+                                os.environ[key] = value
             
+            # Use the updated API keys and port
             host = os.getenv('LANGFUSE_HOST', 'http://localhost:3001')
-            public_key = os.getenv('LANGFUSE_PUBLIC_KEY', '')
-            secret_key = os.getenv('LANGFUSE_SECRET_KEY', '')
+            public_key = os.getenv('LANGFUSE_PUBLIC_KEY', 'pk-lf-6c9dc00f-e286-40ff-a5ea-2a37c3e616c1')
+            secret_key = os.getenv('LANGFUSE_SECRET_KEY', 'sk-lf-03aface1-27d1-4982-8a77-2837e679e4ec')
             
             if not public_key or not secret_key:
                 logger.info("LangFuse credentials not configured. Running without observability.")
                 return
             
-            self.client = Langfuse(
-                host=host,
-                public_key=public_key,
-                secret_key=secret_key
-            )
+            # Set environment variables for the @observe decorator to use (LangFuse SDK v2)
+            os.environ['LANGFUSE_HOST'] = host
+            os.environ['LANGFUSE_PUBLIC_KEY'] = public_key  
+            os.environ['LANGFUSE_SECRET_KEY'] = secret_key
             
-            # Test connection
-            self.client.auth_check()
+            # Remove any OpenTelemetry configuration that might conflict with SDK v2
+            for key in ['OTEL_EXPORTER_OTLP_TRACES_ENDPOINT', 'OTEL_EXPORTER_OTLP_HEADERS']:
+                if key in os.environ:
+                    del os.environ[key]
+            
+            # Don't initialize client directly - let @observe handle it
             self.enabled = True
-            logger.info(f"LangFuse client initialized successfully. Host: {host}")
+            logger.info(f"LangFuse environment configured successfully. Host: {host}")
+            logger.info(f"@observe decorators will use these credentials")
             
         except Exception as e:
-            logger.warning(f"Failed to initialize LangFuse client: {e}")
+            logger.warning(f"Failed to configure LangFuse environment: {e}")
             self.enabled = False
     
     def get_trace_id(self) -> str:
         """Generate a new trace ID"""
         return str(uuid.uuid4())
+    
+    def create_trace(self, trace_id: str = None, user_id: str = "anonymous", session_id: str = None):
+        """Create a trace in LangFuse (SDK v2)"""
+        if not self.enabled:
+            return None
+            
+        try:
+            # Initialize a direct client for trace creation if needed
+            from langfuse import Langfuse
+            client = Langfuse()
+            
+            # Use SDK v2 trace method
+            trace = client.trace(
+                id=trace_id or self.get_trace_id(),
+                user_id=user_id,
+                session_id=session_id or self.session_id
+            )
+            return trace.id if trace else None
+        except Exception as e:
+            logger.error(f"Failed to create LangFuse trace: {e}")
+            return None
+    
+    def is_langfuse_available(self) -> bool:
+        """Check if LangFuse service is available and healthy"""
+        try:
+            import requests
+            host = os.getenv('LANGFUSE_HOST', 'http://localhost:3001')
+            response = requests.get(f"{host}/api/public/health", timeout=5)
+            return response.status_code == 200
+        except Exception as e:
+            logger.warning(f"LangFuse health check failed: {e}")
+            return False
     
     def flush(self):
         """Flush any pending observations"""

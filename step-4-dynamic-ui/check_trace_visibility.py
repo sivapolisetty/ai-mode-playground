@@ -47,21 +47,31 @@ def check_traces():
                 print(f"     URL: {host}/project/cme69v2i5000610rxp11ozgcv/traces/{trace_id}")
                 print()
             
-            # Check for our specific trace ID
-            target_trace_id = "8553bfc2-8cf5-4c06-a8db-c2466fc6dbfc"
-            found_target = False
+            # Check for our most recent trace ID from the API response  
+            recent_trace_id = "58d35a31-86bf-4c64-a17d-524e6a5bae0d"
+            found_recent = False
             
             for trace in traces:
-                if trace.get('id') == target_trace_id:
-                    found_target = True
-                    print(f"🎯 FOUND TARGET TRACE: {target_trace_id}")
+                if trace.get('id') == recent_trace_id:
+                    found_recent = True
+                    print(f"🎯 FOUND RECENT TRACE: {recent_trace_id}")
                     print(f"   Name: {trace.get('name')}")
                     print(f"   Input: {trace.get('input', 'no input')}")
                     break
             
-            if not found_target:
-                print(f"⚠️  Target trace {target_trace_id} not found yet")
+            if not found_recent:
+                print(f"⚠️  Recent trace {recent_trace_id} not found yet")
                 print("   It may still be processing...")
+            
+            # Also show the most recent trace regardless
+            if traces:
+                latest = traces[0]
+                print(f"\n🆕 LATEST TRACE:")
+                print(f"   ID: {latest.get('id')}")
+                print(f"   Name: {latest.get('name')}")
+                print(f"   Time: {latest.get('timestamp')}")
+                print(f"   Input: {latest.get('input', 'No input available')[:100]}")
+                print(f"   URL: http://localhost:3001/project/cme69v2i5000610rxp11ozgcv/traces/{latest.get('id')}")
             
             return len(traces)
             
