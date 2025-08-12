@@ -15,7 +15,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 from .component_scanner import ComponentScanner
 from .component_cache import ComponentCache, ComponentWatcher
-from shared.observability.langfuse_decorator import trace_tool_execution
+from shared.observability.langfuse_decorator import trace_tool_execution, observe
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +92,7 @@ class MCPTools:
                 
         return constraints
 
-    @trace_tool_execution("search_products")
+    @observe(as_type="span")
     async def search_products(self, query: str, filters: Dict[str, Any] = None) -> Dict[str, Any]:
         """Search for products by query with enhanced filtering"""
         try:
@@ -191,6 +191,7 @@ class MCPTools:
             logger.error(f"Product search failed: {e}")
             return {"success": False, "error": str(e)}
     
+    @observe(as_type="span")
     async def get_products(self, category_id: Optional[int] = None, brand: Optional[str] = None, 
                           limit: Optional[int] = None, offset: Optional[int] = None) -> Dict[str, Any]:
         """Get all products with enhanced filtering and pagination"""
@@ -232,6 +233,7 @@ class MCPTools:
             return {"success": False, "error": str(e)}
     
     @trace_tool_execution("get_customer_info")
+    @observe(as_type="span")
     async def get_customer_info(self, customer_id: str) -> Dict[str, Any]:
         """Get detailed customer information"""
         try:
@@ -250,6 +252,7 @@ class MCPTools:
             logger.error(f"Get customer info failed: {e}")
             return {"success": False, "error": str(e)}
     
+    @observe(as_type="span")
     async def get_customers(self, limit: Optional[int] = None, search: Optional[str] = None) -> Dict[str, Any]:
         """Get customers with search and pagination"""
         try:
@@ -283,6 +286,7 @@ class MCPTools:
             logger.error(f"Get customers failed: {e}")
             return {"success": False, "error": str(e)}
     
+    @observe(as_type="span")
     async def get_customer_orders(self, customer_id: str, limit: Optional[int] = None) -> Dict[str, Any]:
         """Get orders for a specific customer with pagination"""
         try:
@@ -309,7 +313,7 @@ class MCPTools:
             logger.error(f"Get customer orders failed: {e}")
             return {"success": False, "error": str(e)}
     
-    @trace_tool_execution("create_order")
+    @observe(as_type="span")
     async def create_order(self, customer_id: str, product_id: str, quantity: int = 1, 
                           shipping_address: str = None, payment_method: str = "Credit Card",
                           special_instructions: str = None) -> Dict[str, Any]:
@@ -372,6 +376,7 @@ class MCPTools:
             logger.error(f"Create order failed: {e}")
             return {"success": False, "error": str(e)}
     
+    @observe(as_type="span")
     async def get_order(self, order_id: str, customer_id: str = None) -> Dict[str, Any]:
         """Get detailed order information by searching through customer orders"""
         try:
@@ -404,6 +409,7 @@ class MCPTools:
             logger.error(f"Get order failed: {e}")
             return {"success": False, "error": str(e)}
     
+    @observe(as_type="span")
     async def update_order(self, order_id: str, updates: Dict[str, Any], customer_id: str = None) -> Dict[str, Any]:
         """
         Update an existing order - Limited to cancellation since API doesn't support general updates
@@ -449,6 +455,7 @@ class MCPTools:
             logger.error(f"Update order failed: {e}")
             return {"success": False, "error": str(e)}
     
+    @observe(as_type="span")
     async def cancel_order(self, order_id: str, reason: str = None) -> Dict[str, Any]:
         """Cancel an order with optional reason using the correct API endpoint"""
         try:
@@ -490,6 +497,7 @@ class MCPTools:
             return {"success": False, "error": str(e)}
     
     @trace_tool_execution("track_order")
+    @observe(as_type="span")
     async def track_order(self, order_id: str, customer_id: str = None) -> Dict[str, Any]:
         """Get order tracking information"""
         try:
@@ -527,6 +535,7 @@ class MCPTools:
             logger.error(f"Track order failed: {e}")
             return {"success": False, "error": str(e)}
     
+    @observe(as_type="span")
     async def update_customer(self, customer_id: str, updates: Dict[str, Any]) -> Dict[str, Any]:
         """Update customer information"""
         try:
@@ -558,6 +567,7 @@ class MCPTools:
             logger.error(f"Update customer failed: {e}")
             return {"success": False, "error": str(e)}
     
+    @observe(as_type="span")
     async def get_categories(self) -> Dict[str, Any]:
         """Get all product categories"""
         try:
@@ -575,6 +585,7 @@ class MCPTools:
             logger.error(f"Get categories failed: {e}")
             return {"success": False, "error": str(e)}
     
+    @observe(as_type="span")
     async def get_product_by_id(self, product_id: str) -> Dict[str, Any]:
         """Get specific product by ID"""
         try:
@@ -597,6 +608,7 @@ class MCPTools:
             logger.error(f"Get product by ID failed: {e}")
             return {"success": False, "error": str(e)}
     
+    @observe(as_type="span")
     async def get_customer_by_id(self, customer_id: str) -> Dict[str, Any]:
         """Get specific customer by ID"""
         try:
@@ -624,6 +636,7 @@ class MCPTools:
     # ========================================
     
     @trace_tool_execution("get_component_library")
+    @observe(as_type="span")
     async def get_component_library(self) -> Dict[str, Any]:
         """MCP Tool: Get complete UI component library information"""
         try:
@@ -659,6 +672,7 @@ class MCPTools:
             logger.error(f"Component library scan failed: {e}")
             return {"success": False, "error": str(e)}
     
+    @observe(as_type="span")
     async def get_component_schema(self, component_name: str) -> Dict[str, Any]:
         """MCP Tool: Get detailed schema for specific component"""
         try:
@@ -703,6 +717,7 @@ class MCPTools:
             logger.error(f"Component schema fetch failed: {e}")
             return {"success": False, "error": str(e)}
     
+    @observe(as_type="span")
     async def get_ui_patterns(self, intent: str) -> Dict[str, Any]:
         """MCP Tool: Get recommended UI patterns for specific intent"""
         try:
@@ -769,6 +784,7 @@ class MCPTools:
             logger.error(f"UI patterns fetch failed: {e}")
             return {"success": False, "error": str(e)}
     
+    @observe(as_type="span")
     async def validate_component_spec(self, component_spec: Dict[str, Any]) -> Dict[str, Any]:
         """MCP Tool: Validate component specification against schema"""
         try:
@@ -818,6 +834,7 @@ class MCPTools:
             logger.error(f"Component validation failed: {e}")
             return {"success": False, "error": str(e)}
     
+    @observe(as_type="span")
     async def get_cache_status(self) -> Dict[str, Any]:
         """MCP Tool: Get component cache status and statistics"""
         try:
@@ -830,6 +847,7 @@ class MCPTools:
             logger.error(f"Cache status failed: {e}")
             return {"success": False, "error": str(e)}
     
+    @observe(as_type="span")
     async def refresh_component_cache(self) -> Dict[str, Any]:
         """MCP Tool: Force refresh component cache"""
         try:

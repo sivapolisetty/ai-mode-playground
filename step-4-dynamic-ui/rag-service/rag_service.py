@@ -18,10 +18,15 @@ import numpy as np
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 try:
-    from ai_backend.shared.observability.langfuse_decorator import trace_rag_operation
+    from ai_backend.shared.observability.langfuse_decorator import trace_rag_operation, observe
 except ImportError:
     # Fallback no-op decorator if import fails
     def trace_rag_operation(collection_type: str = "unknown"):
+        def decorator(func):
+            return func
+        return decorator
+    
+    def observe(as_type: str = "span", **kwargs):
         def decorator(func):
             return func
         return decorator
@@ -107,6 +112,7 @@ class RAGService:
             "promotion", "eligibility", "qualification", "threshold", "limit"
         }
     
+    @observe(as_type="span")
     async def classify_query(self, query: str) -> QueryType:
         """
         Classify query type based on keywords and context
@@ -134,7 +140,7 @@ class RAGService:
         else:
             return QueryType.TRANSACTIONAL
     
-    @trace_rag_operation("faq")
+    @observe(as_type="span")
     async def search_faq(self, query: str, limit: int = None) -> List[SearchResult]:
         """
         Search FAQ knowledge base
@@ -179,7 +185,7 @@ class RAGService:
         logger.info(f"FAQ search returned {len(search_results)} results")
         return search_results
     
-    @trace_rag_operation("business_rules")
+    @observe(as_type="span")
     async def search_business_rules(self, query: str, limit: int = None) -> List[SearchResult]:
         """
         Search business rules knowledge base
@@ -306,6 +312,7 @@ class RAGService:
         logger.info(f"Category search ({category}) returned {len(search_results)} results")
         return search_results
     
+    @observe(as_type="span")
     async def hybrid_search(self, query: str, limit: int = None) -> List[SearchResult]:
         """
         Perform hybrid search across both FAQ and business rules
@@ -333,6 +340,7 @@ class RAGService:
         return all_results[:limit]
     
     @trace_rag_operation("hybrid")
+    @observe(as_type="span")
     async def process_query(self, query: str, context: Dict[str, Any] = None) -> RAGResponse:
         """
         Process a query and return RAG response
@@ -392,6 +400,7 @@ class RAGService:
         logger.info(f"RAG response generated with {len(results)} results, confidence: {confidence:.2f}")
         return response
     
+    @observe(as_type="span")
     async def get_similar_questions(self, query: str, limit: int = 3) -> List[str]:
         """
         Get similar questions from FAQ for query suggestions

@@ -23,6 +23,7 @@ from config.llm_config import LLMConfig
 from config.logging_config import logging_config
 from rag_service import RAGService
 from shared.observability.langfuse_client import langfuse_client
+from shared.observability.langfuse_decorator import observe
 
 # Load environment variables
 load_dotenv()
@@ -99,6 +100,7 @@ async def health_check():
     }
 
 @app.post("/chat")
+@observe(as_type="generation")
 async def chat_endpoint(request: ChatRequest):
     """Enhanced chat endpoint with RAG capabilities"""
     session_id = request.context.get("session_id", f"session_{int(time.time())}")
@@ -209,6 +211,7 @@ async def chat_endpoint(request: ChatRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/knowledge/search")
+@observe(as_type="span")
 async def knowledge_search_endpoint(request: KnowledgeSearchRequest):
     """Direct knowledge base search endpoint"""
     try:
@@ -416,6 +419,7 @@ async def get_knowledge_stats():
 # ========================================
 
 @app.get("/ui/components")
+@observe(as_type="span")
 async def get_component_library():
     """Get complete UI component library"""
     try:
@@ -441,6 +445,7 @@ async def get_component_library():
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/ui/components/{component_name}")
+@observe(as_type="span")
 async def get_component_schema(component_name: str):
     """Get detailed schema for specific component"""
     try:

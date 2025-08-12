@@ -27,7 +27,7 @@ from shared.observability.langfuse_client import langfuse_client
 from shared.observability.langfuse_decorator import (
     trace_conversation, trace_agent_operation, trace_tool_execution,
     trace_llm_generation, trace_ui_generation, trace_rag_operation,
-    flush_observations
+    flush_observations, observe
 )
 from prompts.prompt_manager import prompt_manager
 
@@ -86,6 +86,7 @@ class EnhancedAgent:
         state.update(updates)
         logger.info(f"Updated session {session_id}: {updates}")
     
+    @observe(as_type="span")
     async def process_query_with_orchestration(self, user_query: str, context: Dict[str, Any] = None, trace_id: str = None) -> Dict[str, Any]:
         """
         Process query using intelligent tool orchestration where LLM decides which tools to call
@@ -151,6 +152,7 @@ class EnhancedAgent:
             # Fall back to traditional intelligent processing
             return await self.process_query_intelligently(user_query, context, trace_id)
     
+    @observe(as_type="span")
     async def process_query_intelligently(self, user_query: str, context: Dict[str, Any] = None, trace_id: str = None) -> Dict[str, Any]:
         """
         Process user query with intelligent intent understanding and context resolution
@@ -209,6 +211,7 @@ class EnhancedAgent:
             return await self.process_query(user_query, context, trace_id)
     
     @trace_conversation(name="step4_dynamic_ui_conversation", user_id="anonymous")
+    @observe(as_type="span")
     async def process_query(self, user_query: str, context: Dict[str, Any] = None, trace_id: str = None) -> Dict[str, Any]:
         """
         Process user query with enhanced RAG capabilities
@@ -288,7 +291,7 @@ class EnhancedAgent:
             
             return self._fallback_response(user_query)
     
-    @trace_agent_operation("query_classification", "span")
+    @observe(as_type="span")
     async def determine_routing_strategy(self, 
                                        user_query: str, 
                                        rag_response, 
@@ -340,6 +343,7 @@ class EnhancedAgent:
         logger.info("Routing decision made", **routing_decision)
         return routing_decision
     
+    @observe(as_type="span")
     async def create_execution_plan(self, 
                                   user_query: str,
                                   routing_decision: Dict[str, Any],
@@ -475,6 +479,7 @@ class EnhancedAgent:
             "session_context": session_state
         }
     
+    @observe(as_type="span")
     async def execute_tools(self, tool_calls: List[Dict[str, Any]], session_id: str = "default", trace_id: str = None) -> List[Dict[str, Any]]:
         """Execute transactional tools (same as Step 1)"""
         results = []
@@ -546,6 +551,7 @@ class EnhancedAgent:
         
         return results
     
+    @observe(as_type="span")
     async def format_response(self, 
                             execution_plan: Dict[str, Any],
                             tool_results: List[Dict[str, Any]], 
@@ -716,6 +722,7 @@ class EnhancedAgent:
             logger.error(f"Component library fetch failed: {e}")
             self.ui_generation_enabled = False
     
+    @observe(as_type="span")
     async def generate_ui_response(self, user_query: str, execution_plan: Dict[str, Any], tool_results: List[Dict[str, Any]], context: Dict[str, Any] = None) -> Dict[str, Any]:
         """Generate UI component specifications using intelligent component selection"""
         try:
@@ -761,6 +768,7 @@ class EnhancedAgent:
                 "error": str(e)
             }
     
+    @observe(as_type="span")
     async def _generate_ui_components_from_orchestration(self, user_query: str, orchestration_result: Dict[str, Any], context: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Generate UI components based on orchestration results"""
         try:
@@ -935,6 +943,7 @@ class EnhancedAgent:
         
         return components
     
+    @observe(as_type="span")
     async def _generate_intelligent_ui_components(self, user_query: str, execution_plan: Dict[str, Any], tool_results: List[Dict[str, Any]], context: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], str, str]:
         """Generate UI components using intelligent component selection"""
         try:
@@ -1153,6 +1162,7 @@ class EnhancedAgent:
         else:
             return f"Handle user query: {user_query[:50]}..."
     
+    @observe(as_type="span")
     async def _generate_ui_specification(self, user_query: str, execution_plan: Dict[str, Any], tool_results: List[Dict[str, Any]], context: Dict[str, Any]) -> Dict[str, Any]:
         """Generate UI specification using LLM"""
         try:
@@ -1271,6 +1281,7 @@ class EnhancedAgent:
                 "error": "Failed to parse LLM response"
             }
     
+    @observe(as_type="span")
     async def _validate_ui_specification(self, ui_spec: Dict[str, Any]) -> Dict[str, Any]:
         """Validate UI specification against component library"""
         try:

@@ -12,6 +12,14 @@ import asyncio
 from typing import Dict, List, Optional, Any
 from loguru import logger
 
+try:
+    from shared.observability.langfuse_decorator import observe
+except ImportError:
+    def observe(as_type: str = "span", **kwargs):
+        def decorator(func):
+            return func
+        return decorator
+
 class IntelligentOrchestrator:
     """
     LLM-driven tool orchestration system that lets the LLM decide 
@@ -151,6 +159,7 @@ class IntelligentOrchestrator:
             }
         }
     
+    @observe(as_type="span")
     async def orchestrate_query(self, user_query: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
         """
         Use LLM to intelligently decide which tools to call and how to combine results
@@ -197,6 +206,7 @@ class IntelligentOrchestrator:
                 "reasoning": "Orchestration system encountered an error"
             }
     
+    @observe(as_type="span")
     async def _create_execution_plan(self, user_query: str, context: Dict[str, Any]) -> Dict[str, Any]:
         """Let LLM create an execution plan by choosing appropriate tools"""
         
@@ -304,6 +314,7 @@ Now create an execution plan for the user query:"""
             logger.error(f"Execution planning failed: {e}")
             return {"error": str(e)}
     
+    @observe(as_type="span")
     async def _execute_planned_tools(self, tool_calls: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Execute the planned tool calls in sequence"""
         results = []
@@ -354,6 +365,7 @@ Now create an execution plan for the user query:"""
         
         return results
     
+    @observe(as_type="span")
     async def _synthesize_response(self, user_query: str, execution_plan: Dict[str, Any], 
                                  tool_results: List[Dict[str, Any]], context: Dict[str, Any]) -> Dict[str, Any]:
         """Let LLM synthesize tool results into a coherent response"""
