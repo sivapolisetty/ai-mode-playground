@@ -29,6 +29,7 @@ from shared.observability.langfuse_decorator import (
     trace_llm_generation, trace_ui_generation, trace_rag_operation,
     flush_observations, observe
 )
+from shared.observability.hybrid_tracing import langfuse_trace
 from prompts.prompt_manager import prompt_manager
 
 logger = logging_config.get_logger(__name__)
@@ -86,7 +87,7 @@ class EnhancedAgent:
         state.update(updates)
         logger.info(f"Updated session {session_id}: {updates}")
     
-    @observe(as_type="span")
+    @langfuse_trace(name="orchestration_processing")
     async def process_query_with_orchestration(self, user_query: str, context: Dict[str, Any] = None, trace_id: str = None) -> Dict[str, Any]:
         """
         Process query using intelligent tool orchestration where LLM decides which tools to call
@@ -106,7 +107,8 @@ class EnhancedAgent:
             # Use intelligent orchestrator to plan and execute tools
             orchestration_result = await self.intelligent_orchestrator.orchestrate_query(
                 user_query, 
-                orchestration_context
+                orchestration_context,
+                trace_id=trace_id
             )
             
             if not orchestration_result.get("success"):
@@ -124,7 +126,8 @@ class EnhancedAgent:
             ui_components = await self._generate_ui_components_from_orchestration(
                 user_query, 
                 orchestration_result,
-                context
+                context,
+                trace_id=trace_id
             )
             
             # Log orchestration success
@@ -479,7 +482,7 @@ class EnhancedAgent:
             "session_context": session_state
         }
     
-    @observe(as_type="span")
+    @langfuse_trace(name="tool_execution")
     async def execute_tools(self, tool_calls: List[Dict[str, Any]], session_id: str = "default", trace_id: str = None) -> List[Dict[str, Any]]:
         """Execute transactional tools (same as Step 1)"""
         results = []
@@ -722,7 +725,7 @@ class EnhancedAgent:
             logger.error(f"Component library fetch failed: {e}")
             self.ui_generation_enabled = False
     
-    @observe(as_type="span")
+    @langfuse_trace(name="ui_generation")
     async def generate_ui_response(self, user_query: str, execution_plan: Dict[str, Any], tool_results: List[Dict[str, Any]], context: Dict[str, Any] = None) -> Dict[str, Any]:
         """Generate UI component specifications using intelligent component selection"""
         try:
@@ -768,8 +771,8 @@ class EnhancedAgent:
                 "error": str(e)
             }
     
-    @observe(as_type="span")
-    async def _generate_ui_components_from_orchestration(self, user_query: str, orchestration_result: Dict[str, Any], context: Dict[str, Any]) -> List[Dict[str, Any]]:
+    @langfuse_trace(name="ui_components_from_orchestration")
+    async def _generate_ui_components_from_orchestration(self, user_query: str, orchestration_result: Dict[str, Any], context: Dict[str, Any], trace_id: str = None) -> List[Dict[str, Any]]:
         """Generate UI components based on orchestration results"""
         try:
             tool_results = orchestration_result.get("tool_results", [])

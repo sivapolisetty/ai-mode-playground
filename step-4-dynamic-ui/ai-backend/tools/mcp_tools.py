@@ -16,6 +16,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from .component_scanner import ComponentScanner
 from .component_cache import ComponentCache, ComponentWatcher
 from shared.observability.langfuse_decorator import trace_tool_execution, observe
+from shared.observability.hybrid_tracing import langfuse_trace
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +93,7 @@ class MCPTools:
                 
         return constraints
 
-    @observe(as_type="span")
+    @langfuse_trace(name="search_products")
     async def search_products(self, query: str, filters: Dict[str, Any] = None) -> Dict[str, Any]:
         """Search for products by query with enhanced filtering"""
         try:
@@ -313,7 +314,7 @@ class MCPTools:
             logger.error(f"Get customer orders failed: {e}")
             return {"success": False, "error": str(e)}
     
-    @observe(as_type="span")
+    @langfuse_trace(name="create_order")
     async def create_order(self, customer_id: str, product_id: str, quantity: int = 1, 
                           shipping_address: str = None, payment_method: str = "Credit Card",
                           special_instructions: str = None) -> Dict[str, Any]:

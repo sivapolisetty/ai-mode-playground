@@ -100,12 +100,11 @@ async def health_check():
     }
 
 @app.post("/chat")
-@observe(as_type="generation")
 async def chat_endpoint(request: ChatRequest):
     """Enhanced chat endpoint with RAG capabilities"""
     session_id = request.context.get("session_id", f"session_{int(time.time())}")
     
-    # Create LangFuse trace (or generate UUID if LangFuse not available)
+    # Create LangFuse trace for the conversation
     trace_id = langfuse_client.create_trace(
         user_message=request.message,
         session_id=session_id,
@@ -583,7 +582,7 @@ if __name__ == "__main__":
     # Check LangFuse connection before starting (STRICTLY REQUIRED)
     logger.info("🔍 Checking LangFuse connection...")
     if not langfuse_config.is_langfuse_available():
-        logger.error("❌ LangFuse is not available on port 3000.")
+        logger.error("❌ LangFuse is not available on port 3001.")
         logger.error("   LangFuse observability is REQUIRED for Step 4 Dynamic UI.")
         logger.error("   This is a core architectural requirement.")
         logger.error("")
@@ -592,14 +591,14 @@ if __name__ == "__main__":
         logger.error("   OR: ./start-services.sh langfuse-only")
         logger.error("")
         logger.error("📝 LangFuse Configuration:")
-        logger.error("   Host: http://localhost:3000")
-        logger.error("   Public Key: pk-lf-2dece1a4-10e4-4113-a823-105c85e9ce9e")
-        logger.error("   Secret Key: sk-lf-4a73a915-faee-4483-ac0d-79e5fc52d002")
+        logger.error("   Host: http://localhost:3001")
+        logger.error("   Public Key: pk-lf-6c9dc00f-e286-40ff-a5ea-2a37c3e616c1")
+        logger.error("   Secret Key: sk-lf-03aface1-27d1-4982-8a77-2837e679e4ec")
         logger.error("")
         logger.error("🚫 Cannot proceed without LangFuse observability platform.")
         sys.exit(1)
     else:
-        logger.info("✅ LangFuse connection confirmed on port 3000")
+        logger.info("✅ LangFuse connection confirmed on port 3001")
     
     uvicorn.run(
         app,

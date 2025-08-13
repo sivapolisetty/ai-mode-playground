@@ -14,8 +14,14 @@ from loguru import logger
 
 try:
     from shared.observability.langfuse_decorator import observe
+    from shared.observability.hybrid_tracing import langfuse_trace
 except ImportError:
     def observe(as_type: str = "span", **kwargs):
+        def decorator(func):
+            return func
+        return decorator
+    
+    def langfuse_trace(name: str = None, **kwargs):
         def decorator(func):
             return func
         return decorator
@@ -159,8 +165,8 @@ class IntelligentOrchestrator:
             }
         }
     
-    @observe(as_type="span")
-    async def orchestrate_query(self, user_query: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
+    @langfuse_trace(name="intelligent_orchestration")
+    async def orchestrate_query(self, user_query: str, context: Dict[str, Any] = None, trace_id: str = None) -> Dict[str, Any]:
         """
         Use LLM to intelligently decide which tools to call and how to combine results
         
@@ -173,7 +179,7 @@ class IntelligentOrchestrator:
         """
         try:
             # Phase 1: Planning - Let LLM decide which tools to call
-            execution_plan = await self._create_execution_plan(user_query, context)
+            execution_plan = await self._create_execution_plan(user_query, context, trace_id=trace_id)
             
             if not execution_plan.get("tool_calls"):
                 return {
@@ -183,10 +189,10 @@ class IntelligentOrchestrator:
                 }
             
             # Phase 2: Execution - Execute the planned tool calls
-            tool_results = await self._execute_planned_tools(execution_plan["tool_calls"])
+            tool_results = await self._execute_planned_tools(execution_plan["tool_calls"], trace_id=trace_id)
             
             # Phase 3: Synthesis - Let LLM combine results into final response
-            final_response = await self._synthesize_response(user_query, execution_plan, tool_results, context)
+            final_response = await self._synthesize_response(user_query, execution_plan, tool_results, context, trace_id=trace_id)
             
             return {
                 "success": True,
@@ -206,8 +212,8 @@ class IntelligentOrchestrator:
                 "reasoning": "Orchestration system encountered an error"
             }
     
-    @observe(as_type="span")
-    async def _create_execution_plan(self, user_query: str, context: Dict[str, Any]) -> Dict[str, Any]:
+    @langfuse_trace(name="create_execution_plan")
+    async def _create_execution_plan(self, user_query: str, context: Dict[str, Any], trace_id: str = None) -> Dict[str, Any]:
         """Let LLM create an execution plan by choosing appropriate tools"""
         
         tools_description = self._format_tools_for_llm()
@@ -314,8 +320,8 @@ Now create an execution plan for the user query:"""
             logger.error(f"Execution planning failed: {e}")
             return {"error": str(e)}
     
-    @observe(as_type="span")
-    async def _execute_planned_tools(self, tool_calls: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    @langfuse_trace(name="execute_planned_tools")
+    async def _execute_planned_tools(self, tool_calls: List[Dict[str, Any]], trace_id: str = None) -> List[Dict[str, Any]]:
         """Execute the planned tool calls in sequence"""
         results = []
         
@@ -365,9 +371,9 @@ Now create an execution plan for the user query:"""
         
         return results
     
-    @observe(as_type="span")
+    @langfuse_trace(name="synthesize_response")
     async def _synthesize_response(self, user_query: str, execution_plan: Dict[str, Any], 
-                                 tool_results: List[Dict[str, Any]], context: Dict[str, Any]) -> Dict[str, Any]:
+                                 tool_results: List[Dict[str, Any]], context: Dict[str, Any], trace_id: str = None) -> Dict[str, Any]:
         """Let LLM synthesize tool results into a coherent response"""
         
         # Format tool results for LLM
